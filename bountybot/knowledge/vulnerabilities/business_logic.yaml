@@ -1,0 +1,187 @@
+vulnerability:
+  name: Business Logic Vulnerability
+  category: A04:2021 - Insecure Design
+  cwe: CWE-840
+  owasp_api: API10:2023 - Unsafe Consumption of APIs
+  
+definition: |
+  Business logic vulnerabilities occur when the application's workflow or business
+  rules can be exploited to achieve unintended outcomes. These flaws arise from
+  incorrect assumptions about how users will interact with the application, missing
+  validation of business rules, or flawed implementation of business processes.
+
+common_patterns:
+  - Missing validation of business rule constraints
+  - Race conditions in multi-step processes
+  - Price manipulation in e-commerce
+  - Quantity or amount tampering
+  - Workflow bypass (skipping required steps)
+  - Privilege escalation through feature abuse
+  - Referral or reward system abuse
+  - Discount code stacking or reuse
+  - Inventory manipulation
+  - Time-based logic flaws
+  - Currency or unit conversion errors
+  - Insufficient anti-automation controls
+
+preconditions:
+  - Application implements complex business workflows
+  - Multiple steps or states in business processes
+  - Financial transactions or value exchange
+  - User-controlled parameters affect business logic
+  - Insufficient validation of business constraints
+  - Lack of proper state management
+
+exploitation_requirements:
+  - Understanding of business workflow
+  - Ability to manipulate request parameters
+  - Knowledge of application state management
+  - Tools to intercept and modify requests
+  - Understanding of timing and race conditions
+  - Multiple accounts or sessions (for some attacks)
+
+false_positive_indicators:
+  - Proper server-side validation of all business rules
+  - Atomic transactions with rollback capabilities
+  - Strong state management and workflow enforcement
+  - Rate limiting and anti-automation controls
+  - Proper synchronization for concurrent operations
+  - Comprehensive audit logging
+  - Business rule validation at multiple layers
+
+common_attack_scenarios:
+  price_manipulation:
+    - Negative quantities to receive money
+    - Decimal/floating point manipulation
+    - Currency conversion exploitation
+    - Coupon stacking beyond limits
+    - Price parameter tampering
+  workflow_bypass:
+    - Skipping payment steps
+    - Bypassing approval processes
+    - Accessing features without prerequisites
+    - Manipulating order of operations
+  race_conditions:
+    - Parallel withdrawal attacks
+    - Double-spending vulnerabilities
+    - Concurrent coupon redemption
+    - Inventory race conditions
+  privilege_abuse:
+    - Referral system gaming
+    - Reward point manipulation
+    - Subscription downgrade with feature retention
+    - Trial period extension
+  account_abuse:
+    - Creating unlimited trial accounts
+    - Bypassing account limits
+    - Sharing premium features
+    - Automated account creation
+
+detection_methods:
+  - Manual testing of business workflows
+  - Parameter manipulation and fuzzing
+  - Race condition testing with parallel requests
+  - State transition analysis
+  - Negative testing (invalid inputs)
+  - Boundary value testing
+  - Time-based testing
+  - Multi-account testing scenarios
+  - Automated workflow testing
+
+mitigation:
+  - Implement comprehensive server-side validation
+  - Enforce business rules at multiple layers
+  - Use atomic transactions with proper locking
+  - Implement proper state management
+  - Add rate limiting and anti-automation controls
+  - Validate all user inputs against business constraints
+  - Implement proper synchronization for concurrent operations
+  - Use idempotency keys for critical operations
+  - Implement comprehensive audit logging
+  - Regular security reviews of business logic
+  - Threat modeling for business workflows
+  - Implement proper error handling without information leakage
+  - Use pessimistic locking for critical resources
+  - Implement workflow state validation
+  - Add monitoring and alerting for anomalous behavior
+
+severity_factors:
+  critical:
+    - Direct financial loss or theft
+    - Unlimited resource consumption
+    - Complete bypass of payment systems
+    - Mass data exfiltration through logic flaw
+    - System-wide service disruption
+  high:
+    - Significant financial impact
+    - Privilege escalation to administrative functions
+    - Large-scale abuse of rewards or discounts
+    - Unauthorized access to premium features
+    - Inventory or resource manipulation
+  medium:
+    - Limited financial impact
+    - Workflow bypass with limited consequences
+    - Minor privilege escalation
+    - Abuse requiring significant effort
+    - Limited scope or impact
+  low:
+    - Minimal financial or security impact
+    - Requires extensive user interaction
+    - Only affects edge cases
+    - Limited exploitability
+
+business_impact:
+  - Direct financial losses
+  - Revenue leakage through discount abuse
+  - Inventory discrepancies
+  - Fraudulent transactions
+  - Service abuse and resource exhaustion
+  - Reputational damage
+  - Customer trust erosion
+  - Operational disruption
+  - Compliance violations
+
+real_world_examples:
+  - "E-commerce: Negative quantity orders resulting in refunds"
+  - "Banking: Race condition allowing multiple withdrawals"
+  - "Subscription: Downgrade with feature retention"
+  - "Referral: Unlimited self-referral rewards"
+  - "Coupon: Stacking discounts beyond 100%"
+  - "Auction: Bid retraction after winning"
+  - "Gaming: In-game currency duplication"
+  - "Booking: Double-booking through race conditions"
+
+compliance_considerations:
+  - PCI DSS: Requirement 6.5.8, 6.5.10
+  - SOC 2: CC6.1, CC7.2
+  - ISO 27001: A.14.2.5
+  - NIST: AC-3, SC-7
+
+remediation_priority: HIGH
+
+testing_tools:
+  - Burp Suite (request manipulation)
+  - OWASP ZAP (automated testing)
+  - Postman (API workflow testing)
+  - Race The Web (race condition testing)
+  - Custom scripts for parallel requests
+  - State machine testing tools
+
+prevention_checklist:
+  - "[ ] All business rules validated server-side"
+  - "[ ] Atomic transactions for critical operations"
+  - "[ ] Proper state management implemented"
+  - "[ ] Rate limiting on sensitive operations"
+  - "[ ] Idempotency keys for financial transactions"
+  - "[ ] Comprehensive audit logging"
+  - "[ ] Negative testing performed"
+  - "[ ] Race condition testing completed"
+  - "[ ] Multi-account abuse scenarios tested"
+  - "[ ] Boundary value testing performed"
+
+references:
+  - "OWASP Testing Guide: Business Logic Testing"
+  - "OWASP Top 10 2021: A04 Insecure Design"
+  - "CWE-840: Business Logic Errors"
+  - "NIST SP 800-95: Guide to Secure Web Services"
+

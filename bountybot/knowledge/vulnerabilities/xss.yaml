@@ -1,0 +1,97 @@
+vulnerability:
+  name: Cross-Site Scripting (XSS)
+  category: A03:2021 - Injection
+  cwe: CWE-79
+  
+definition: |
+  Cross-Site Scripting (XSS) occurs when an application includes untrusted data
+  in a web page without proper validation or escaping, allowing attackers to
+  execute malicious scripts in victims' browsers.
+
+types:
+  stored:
+    description: Malicious script is permanently stored on target server
+    severity: High
+    examples:
+      - Comment sections
+      - User profiles
+      - Forum posts
+  reflected:
+    description: Malicious script is reflected off web server in error messages or search results
+    severity: Medium
+    examples:
+      - Search results
+      - Error messages
+      - URL parameters
+  dom_based:
+    description: Vulnerability exists in client-side code rather than server-side
+    severity: Medium to High
+    examples:
+      - JavaScript that processes URL fragments
+      - Client-side routing
+      - Dynamic DOM manipulation
+
+common_patterns:
+  - Unescaped user input in HTML context
+  - innerHTML assignments with user data
+  - document.write with untrusted data
+  - Unvalidated URL parameters rendered in page
+  - User-controlled attributes without sanitization
+
+preconditions:
+  - Application accepts and displays user input
+  - No output encoding or sanitization
+  - Content-Security-Policy not implemented or weak
+  - User input rendered in HTML, JavaScript, or CSS context
+
+exploitation_requirements:
+  - Ability to inject HTML or JavaScript
+  - Victim must view the page containing payload
+  - No effective XSS filters or WAF
+  - Browser must execute the injected script
+
+false_positive_indicators:
+  - Strong Content-Security-Policy blocks inline scripts
+  - Proper output encoding for all contexts
+  - Framework with automatic escaping (React, Angular with proper usage)
+  - Input sanitization with proven library (DOMPurify)
+  - X-XSS-Protection header enabled
+
+common_payloads:
+  - "<script>alert(document.cookie)</script>"
+  - "<img src=x onerror=alert(1)>"
+  - "<svg onload=alert(1)>"
+  - "javascript:alert(1)"
+  - "<iframe src=javascript:alert(1)>"
+
+detection_methods:
+  - Manual payload injection
+  - Automated scanning tools
+  - Browser developer tools inspection
+  - Proxy interception (Burp Suite)
+  - Source code review
+
+mitigation:
+  - Implement proper output encoding for all contexts
+  - Use Content-Security-Policy headers
+  - Sanitize user input with proven libraries
+  - Use frameworks with automatic escaping
+  - Validate input against whitelist
+  - Set HttpOnly flag on sensitive cookies
+  - Implement X-XSS-Protection header
+
+severity_factors:
+  high:
+    - Stored XSS affecting all users
+    - Session hijacking possible
+    - Administrative context
+    - Sensitive data exposure
+  medium:
+    - Reflected XSS requiring user interaction
+    - Limited scope or impact
+    - Non-sensitive context
+  low:
+    - Self-XSS only
+    - Requires significant user interaction
+    - Minimal impact
+

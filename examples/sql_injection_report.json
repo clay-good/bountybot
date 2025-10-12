@@ -1,0 +1,27 @@
+{
+  "title": "SQL Injection in User Search Endpoint",
+  "researcher": "security_researcher_123",
+  "submission_date": "2024-01-15T10:30:00Z",
+  "vulnerability_type": "SQL Injection",
+  "severity": "High",
+  "severity_justification": "Allows unauthorized access to all user data in the database, including sensitive personal information and credentials.",
+  "affected_components": [
+    "/api/users/search",
+    "UserController.search()",
+    "database/users table"
+  ],
+  "reproduction_steps": [
+    "Navigate to the user search page at https://example.com/users",
+    "In the search box, enter the following payload: ' OR 1=1--",
+    "Submit the search form",
+    "Observe that all user records are returned instead of filtered results",
+    "Verify that the SQL query is being constructed using string concatenation"
+  ],
+  "proof_of_concept": "curl -X POST https://example.com/api/users/search -H 'Content-Type: application/json' -d '{\"query\": \"' OR 1=1--\"}'",
+  "impact_description": "An attacker can bypass authentication and authorization checks to access all user records in the database. This includes usernames, email addresses, hashed passwords, and other sensitive personal information. The attacker could also potentially modify or delete data using UPDATE or DELETE statements.",
+  "attachments": [
+    "screenshot_all_users.png",
+    "burp_request.txt"
+  ]
+}
+

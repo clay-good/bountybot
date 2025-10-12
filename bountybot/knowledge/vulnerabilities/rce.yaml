@@ -1,0 +1,91 @@
+name: "Remote Code Execution (RCE)"
+cwe_id: "CWE-78, CWE-94"
+description: "Remote Code Execution vulnerabilities allow attackers to execute arbitrary code on the target system, typically through command injection, unsafe deserialization, or template injection."
+
+patterns:
+  - "User input passed to system command execution"
+  - "Unsafe deserialization of untrusted data"
+  - "Template injection in rendering engines"
+  - "eval() or exec() with user-controlled input"
+  - "Dynamic code evaluation without sanitization"
+
+preconditions:
+  - "Application accepts user input"
+  - "Input is used in code execution context"
+  - "Insufficient input validation or sanitization"
+  - "No sandboxing or isolation"
+
+exploitation_indicators:
+  - "Command injection metacharacters (;, |, &, $, `, etc.)"
+  - "Serialized objects with malicious payloads"
+  - "Template syntax in user input"
+  - "Successful execution of system commands"
+  - "Reverse shell connection established"
+  - "File system modifications"
+  - "Network connections to attacker infrastructure"
+
+false_positive_indicators:
+  - "Input properly sanitized before execution"
+  - "Whitelist validation in place"
+  - "Sandboxed execution environment"
+  - "No evidence of actual code execution"
+  - "WAF or runtime protection blocking attempts"
+
+mitigation:
+  - "Never pass user input directly to system commands"
+  - "Use parameterized APIs instead of shell commands"
+  - "Implement strict input validation and whitelisting"
+  - "Avoid deserialization of untrusted data"
+  - "Use safe template rendering with auto-escaping"
+  - "Implement least privilege principles"
+  - "Use sandboxing and containerization"
+  - "Deploy runtime application self-protection (RASP)"
+
+severity_factors:
+  critical:
+    - "Unauthenticated RCE"
+    - "Full system compromise possible"
+    - "No user interaction required"
+    - "Affects production systems"
+  high:
+    - "Authenticated RCE"
+    - "Limited privilege execution"
+    - "Requires specific conditions"
+  medium:
+    - "Requires complex exploitation chain"
+    - "Limited impact scope"
+    - "Sandboxed environment"
+
+code_patterns:
+  python:
+    - "os.system\\("
+    - "subprocess.call\\(.*shell=True"
+    - "eval\\("
+    - "exec\\("
+    - "pickle.loads\\("
+    - "__import__\\("
+  java:
+    - "Runtime.getRuntime\\(\\).exec"
+    - "ProcessBuilder"
+    - "ObjectInputStream.readObject"
+    - "ScriptEngine.eval"
+  php:
+    - "system\\("
+    - "exec\\("
+    - "shell_exec\\("
+    - "passthru\\("
+    - "eval\\("
+    - "unserialize\\("
+    - "assert\\("
+  javascript:
+    - "eval\\("
+    - "Function\\("
+    - "child_process.exec"
+    - "vm.runInNewContext"
+  ruby:
+    - "system\\("
+    - "exec\\("
+    - "`.*`"
+    - "Kernel.eval"
+    - "Marshal.load"
+

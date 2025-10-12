@@ -1,0 +1,358 @@
+name: "Path Traversal / Directory Traversal"
+category: "Input Validation"
+severity: "HIGH"
+cwe: "CWE-22"
+owasp: "A01:2021 - Broken Access Control"
+
+description: |
+  Path traversal (also known as directory traversal) vulnerabilities allow attackers to access files and 
+  directories stored outside the intended directory. By manipulating file path references with sequences 
+  like "../" (dot-dot-slash), attackers can traverse the file system to access arbitrary files. This can 
+  lead to exposure of sensitive configuration files, source code, credentials, or system files. In some 
+  cases, it can be combined with file upload vulnerabilities to achieve remote code execution.
+
+common_patterns:
+  - "Unsanitized file path parameters"
+  - "Direct file inclusion based on user input"
+  - "Download/read file functionality"
+  - "Template/theme selection"
+  - "Language file selection"
+  - "Image/resource loading"
+  - "Log file viewing"
+  - "Backup file access"
+  - "Configuration file reading"
+  - "Missing path canonicalization"
+  - "Inadequate input validation"
+  - "Blacklist-based filtering"
+
+attack_vectors:
+  basic_traversal:
+    description: "Standard directory traversal using ../"
+    payloads:
+      - "../../../etc/passwd"
+      - "..\\..\\..\\windows\\win.ini"
+      - "../../../../etc/shadow"
+      - "../../../var/www/html/config.php"
+      - "../../database.yml"
+  
+  encoded_traversal:
+    description: "URL-encoded path traversal sequences"
+    payloads:
+      - "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd"
+      - "..%252f..%252f..%252fetc%252fpasswd" # Double encoding
+      - "%2e%2e%5c%2e%2e%5c%2e%2e%5cwindows%5cwin.ini"
+  
+  unicode_encoding:
+    description: "Unicode/UTF-8 encoded traversal"
+    payloads:
+      - "..%c0%af..%c0%af..%c0%afetc%c0%afpasswd"
+      - "..%ef%bc%8f..%ef%bc%8f..%ef%bc%8fetc%ef%bc%8fpasswd"
+  
+  null_byte_injection:
+    description: "Null byte to truncate file extension"
+    payloads:
+      - "../../../etc/passwd%00.jpg"
+      - "../../../../etc/shadow\x00.png"
+  
+  absolute_path:
+    description: "Absolute path bypass"
+    payloads:
+      - "/etc/passwd"
+      - "C:\\windows\\system32\\config\\sam"
+      - "/var/www/html/.env"
+  
+  filter_bypass:
+    description: "Bypass weak filters"
+    payloads:
+      - "....//....//....//etc/passwd" # Bypass ../ removal
+      - "..;/..;/..;/etc/passwd" # Bypass with semicolon
+      - "....\\\\....\\\\....\\\\windows\\win.ini"
+
+exploitation_requirements:
+  - "Application accepts file path as input"
+  - "Insufficient input validation/sanitization"
+  - "Application has read access to sensitive files"
+  - "File path is used in file operations"
+
+detection_methods:
+  static_analysis:
+    - "Review file operation code (fopen, readFile, include, require)"
+    - "Check for path sanitization"
+    - "Verify use of safe file access functions"
+    - "Check for path canonicalization"
+    - "Review file path construction logic"
+  
+  dynamic_testing:
+    - "Test with ../ sequences"
+    - "Test with encoded traversal payloads"
+    - "Test with absolute paths"
+    - "Test with null byte injection"
+    - "Test with filter bypass techniques"
+    - "Monitor for error messages revealing file paths"
+    - "Test different OS path separators (/ and \\)"
+  
+  code_review_checklist:
+    - "Are file paths validated against whitelist?"
+    - "Is path canonicalization performed?"
+    - "Are symbolic links resolved?"
+    - "Is chroot or similar sandboxing used?"
+    - "Are file operations restricted to specific directories?"
+    - "Is user input sanitized before file operations?"
+
+mitigation_strategies:
+  input_validation:
+    - "Whitelist allowed files/directories"
+    - "Reject any input containing ../ or ..\\"
+    - "Validate against allowed characters"
+    - "Use file IDs instead of filenames"
+    - "Canonicalize paths before validation"
+  
+  secure_coding:
+    - "Use safe file access APIs"
+    - "Implement chroot jail or similar sandboxing"
+    - "Resolve symbolic links"
+    - "Use absolute paths internally"
+    - "Strip path information from user input"
+    - "Use basename() to extract filename only"
+  
+  access_control:
+    - "Run application with minimal file system permissions"
+    - "Restrict file access to specific directories"
+    - "Use separate user accounts for different components"
+    - "Implement principle of least privilege"
+  
+  additional_controls:
+    - "Log all file access attempts"
+    - "Monitor for suspicious patterns"
+    - "Implement rate limiting"
+    - "Use Web Application Firewall (WAF)"
+
+severity_factors:
+  critical:
+    - "Access to sensitive system files (/etc/shadow, SAM)"
+    - "Access to application credentials/secrets"
+    - "Can read source code with hardcoded secrets"
+    - "No authentication required"
+  
+  high:
+    - "Access to configuration files"
+    - "Access to database credentials"
+    - "Access to API keys"
+    - "Access to user data"
+  
+  medium:
+    - "Access to non-sensitive files"
+    - "Limited file access"
+    - "Strong authentication required"
+
+business_impact:
+  - "Exposure of sensitive data (credentials, PII)"
+  - "Source code disclosure"
+  - "Configuration file exposure"
+  - "Intellectual property theft"
+  - "Compliance violations (PCI DSS, HIPAA, GDPR)"
+  - "Potential for privilege escalation"
+  - "Potential for remote code execution (when combined with file upload)"
+  - "Reputational damage"
+
+compliance_considerations:
+  pci_dss:
+    - "Requirement 6.5.8: Improper access control"
+    - "Requirement 6.5.1: Injection flaws"
+  
+  owasp_top_10:
+    - "A01:2021 - Broken Access Control"
+    - "A03:2021 - Injection"
+  
+  nist:
+    - "AC-3: Access Enforcement"
+    - "SI-10: Information Input Validation"
+  
+  gdpr:
+    - "Article 32: Security of processing"
+    - "Article 5: Data protection principles"
+
+testing_tools:
+  - "Burp Suite (Intruder with path traversal payloads)"
+  - "OWASP ZAP"
+  - "dotdotpwn (automated path traversal scanner)"
+  - "DotDotSlash (path traversal fuzzer)"
+  - "Wfuzz with path traversal wordlists"
+  - "ffuf (fast web fuzzer)"
+
+common_target_files:
+  linux:
+    - "/etc/passwd - User account information"
+    - "/etc/shadow - Password hashes (requires root)"
+    - "/etc/hosts - Host file"
+    - "/etc/hostname - System hostname"
+    - "/etc/issue - System identification"
+    - "/proc/self/environ - Environment variables"
+    - "/proc/self/cmdline - Command line"
+    - "/var/log/apache2/access.log - Web server logs"
+    - "/var/www/html/.env - Environment configuration"
+    - "/home/user/.ssh/id_rsa - SSH private key"
+    - "/root/.bash_history - Command history"
+  
+  windows:
+    - "C:\\windows\\win.ini - Windows configuration"
+    - "C:\\windows\\system32\\drivers\\etc\\hosts - Host file"
+    - "C:\\windows\\system32\\config\\sam - User credentials"
+    - "C:\\inetpub\\wwwroot\\web.config - IIS configuration"
+    - "C:\\windows\\system32\\inetsrv\\config\\applicationHost.config"
+  
+  application:
+    - ".env - Environment variables"
+    - "config.php - Application configuration"
+    - "database.yml - Database credentials"
+    - "wp-config.php - WordPress configuration"
+    - ".git/config - Git configuration"
+    - "composer.json - PHP dependencies"
+    - "package.json - Node.js dependencies"
+
+code_examples:
+  vulnerable_php: |
+    <?php
+    // VULNERABLE: No validation
+    $file = $_GET['file'];
+    $content = file_get_contents("files/" . $file);
+    echo $content;
+    ?>
+  
+  secure_php: |
+    <?php
+    // SECURE: Whitelist and canonicalization
+    $allowed_files = ['report.pdf', 'invoice.pdf', 'receipt.pdf'];
+    $file = $_GET['file'];
+    
+    // Whitelist validation
+    if (!in_array($file, $allowed_files)) {
+        die("Invalid file");
+    }
+    
+    // Construct safe path
+    $base_dir = realpath('/var/www/files/');
+    $file_path = realpath($base_dir . '/' . $file);
+    
+    // Verify file is within allowed directory
+    if (strpos($file_path, $base_dir) !== 0) {
+        die("Access denied");
+    }
+    
+    // Verify file exists and is readable
+    if (!is_file($file_path) || !is_readable($file_path)) {
+        die("File not found");
+    }
+    
+    $content = file_get_contents($file_path);
+    echo $content;
+    ?>
+  
+  vulnerable_python: |
+    # VULNERABLE: No validation
+    from flask import Flask, request, send_file
+    
+    @app.route('/download')
+    def download():
+        filename = request.args.get('file')
+        return send_file(f'files/{filename}')
+  
+  secure_python: |
+    # SECURE: Whitelist and path validation
+    from flask import Flask, request, send_file, abort
+    import os
+    
+    ALLOWED_FILES = ['report.pdf', 'invoice.pdf', 'receipt.pdf']
+    BASE_DIR = '/var/www/files'
+    
+    @app.route('/download')
+    def download():
+        filename = request.args.get('file')
+        
+        # Whitelist validation
+        if filename not in ALLOWED_FILES:
+            abort(400, "Invalid file")
+        
+        # Construct and validate path
+        file_path = os.path.join(BASE_DIR, filename)
+        file_path = os.path.realpath(file_path)
+        
+        # Verify file is within allowed directory
+        if not file_path.startswith(os.path.realpath(BASE_DIR)):
+            abort(403, "Access denied")
+        
+        # Verify file exists
+        if not os.path.isfile(file_path):
+            abort(404, "File not found")
+        
+        return send_file(file_path)
+  
+  vulnerable_nodejs: |
+    // VULNERABLE: No validation
+    const express = require('express');
+    const fs = require('fs');
+    
+    app.get('/read', (req, res) => {
+        const file = req.query.file;
+        fs.readFile(`files/${file}`, 'utf8', (err, data) => {
+            res.send(data);
+        });
+    });
+  
+  secure_nodejs: |
+    // SECURE: Whitelist and path validation
+    const express = require('express');
+    const fs = require('fs');
+    const path = require('path');
+    
+    const ALLOWED_FILES = ['report.pdf', 'invoice.pdf', 'receipt.pdf'];
+    const BASE_DIR = path.resolve('/var/www/files');
+    
+    app.get('/read', (req, res) => {
+        const filename = req.query.file;
+        
+        // Whitelist validation
+        if (!ALLOWED_FILES.includes(filename)) {
+            return res.status(400).send('Invalid file');
+        }
+        
+        // Construct and validate path
+        const filePath = path.resolve(path.join(BASE_DIR, filename));
+        
+        // Verify file is within allowed directory
+        if (!filePath.startsWith(BASE_DIR)) {
+            return res.status(403).send('Access denied');
+        }
+        
+        // Verify file exists
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+            return res.status(404).send('File not found');
+        }
+        
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) return res.status(500).send('Error reading file');
+            res.send(data);
+        });
+    });
+
+prevention_checklist:
+  - "[ ] Whitelist allowed files/directories"
+  - "[ ] Reject input containing ../ or ..\\"
+  - "[ ] Canonicalize paths before validation"
+  - "[ ] Resolve symbolic links"
+  - "[ ] Use file IDs instead of filenames"
+  - "[ ] Implement chroot or sandboxing"
+  - "[ ] Run with minimal file system permissions"
+  - "[ ] Log all file access attempts"
+  - "[ ] Use safe file access APIs"
+  - "[ ] Validate file paths are within allowed directory"
+  - "[ ] Strip path information from user input"
+  - "[ ] Implement rate limiting"
+  - "[ ] Use Web Application Firewall"
+
+references:
+  - "OWASP Path Traversal: https://owasp.org/www-community/attacks/Path_Traversal"
+  - "CWE-22: https://cwe.mitre.org/data/definitions/22.html"
+  - "PortSwigger Directory Traversal: https://portswigger.net/web-security/file-path-traversal"
+  - "PayloadsAllTheThings: https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Directory%20Traversal"
+

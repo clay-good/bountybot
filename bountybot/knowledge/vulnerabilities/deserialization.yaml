@@ -1,0 +1,132 @@
+name: "Insecure Deserialization"
+category: "Injection"
+severity: "CRITICAL"
+cwe: "CWE-502"
+owasp: "A08:2021 - Software and Data Integrity Failures"
+
+description: |
+  Insecure deserialization vulnerabilities occur when untrusted data is used to abuse the logic of an 
+  application, inflict denial of service, or execute arbitrary code upon deserialization. Many programming 
+  languages offer native serialization capabilities that can be exploited if user-controlled data is 
+  deserialized without proper validation. This vulnerability is particularly dangerous because it can lead 
+  to remote code execution, privilege escalation, and complete system compromise.
+
+common_patterns:
+  - "Deserializing untrusted data"
+  - "Session data deserialization"
+  - "Cookie deserialization"
+  - "API request deserialization"
+  - "Message queue deserialization"
+  - "Cache deserialization"
+  - "Database stored serialized objects"
+  - "File upload with serialized content"
+  - "RMI/RPC deserialization"
+
+attack_vectors:
+  java_deserialization:
+    description: "Java object deserialization exploitation"
+    gadget_chains:
+      - "Apache Commons Collections"
+      - "Spring Framework"
+      - "Apache Commons BeanUtils"
+      - "Groovy"
+      - "Apache Commons FileUpload"
+    tools:
+      - "ysoserial - Generate exploitation payloads"
+      - "marshalsec - Test various serialization formats"
+  
+  python_pickle:
+    description: "Python pickle deserialization"
+    payload_example: |
+      import pickle
+      import os
+      
+      class Exploit:
+          def __reduce__(self):
+              return (os.system, ('id',))
+      
+      payload = pickle.dumps(Exploit())
+  
+  php_unserialize:
+    description: "PHP object injection"
+    payload_example: |
+      O:8:"EvilClass":1:{s:4:"file";s:15:"/etc/passwd";}
+  
+  dotnet_deserialization:
+    description: ".NET deserialization"
+    formatters:
+      - "BinaryFormatter"
+      - "NetDataContractSerializer"
+      - "LosFormatter"
+      - "ObjectStateFormatter"
+
+exploitation_requirements:
+  - "Application deserializes user-controlled data"
+  - "Vulnerable deserialization library/method used"
+  - "Gadget chains available in classpath"
+  - "Insufficient input validation"
+
+detection_methods:
+  static_analysis:
+    - "Search for deserialization functions"
+    - "Review serialized data sources"
+    - "Check for unsafe deserializers"
+    - "Verify input validation"
+  
+  dynamic_testing:
+    - "Test with serialized payloads"
+    - "Monitor for deserialization errors"
+    - "Test with ysoserial payloads"
+    - "Test time-based blind exploitation"
+
+mitigation_strategies:
+  - "Avoid deserializing untrusted data"
+  - "Use safe serialization formats (JSON, XML with schema)"
+  - "Implement integrity checks (HMAC)"
+  - "Use allowlists for deserializable classes"
+  - "Run deserialization in sandboxed environment"
+  - "Monitor deserialization operations"
+
+severity_factors:
+  critical:
+    - "Remote code execution possible"
+    - "No authentication required"
+    - "Gadget chains available"
+  
+  high:
+    - "RCE with authentication"
+    - "Limited gadget chains"
+
+business_impact:
+  - "Complete system compromise"
+  - "Remote code execution"
+  - "Data breach"
+  - "Privilege escalation"
+  - "Denial of service"
+
+compliance_considerations:
+  pci_dss:
+    - "Requirement 6.5.1: Injection flaws"
+  owasp_top_10:
+    - "A08:2021 - Software and Data Integrity Failures"
+  nist:
+    - "SI-10: Information Input Validation"
+
+testing_tools:
+  - "ysoserial (Java)"
+  - "ysoserial.net (.NET)"
+  - "marshalsec"
+  - "Burp Suite Deserialization Scanner"
+
+prevention_checklist:
+  - "[ ] Avoid deserializing untrusted data"
+  - "[ ] Use safe serialization formats"
+  - "[ ] Implement integrity checks"
+  - "[ ] Use class allowlists"
+  - "[ ] Monitor deserialization"
+  - "[ ] Run in sandboxed environment"
+
+references:
+  - "OWASP Deserialization: https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data"
+  - "CWE-502: https://cwe.mitre.org/data/definitions/502.html"
+  - "ysoserial: https://github.com/frohoff/ysoserial"

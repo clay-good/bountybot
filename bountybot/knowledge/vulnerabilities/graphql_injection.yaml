@@ -1,0 +1,240 @@
+vulnerability:
+  name: GraphQL Injection and Security Issues
+  category: A03:2021 - Injection
+  cwe: CWE-89, CWE-943
+  owasp_api: API8:2023 - Security Misconfiguration
+  
+definition: |
+  GraphQL injection and security issues occur when GraphQL APIs are improperly
+  configured or lack proper input validation, allowing attackers to extract
+  sensitive data, cause denial of service, or bypass authorization controls.
+  This includes introspection abuse, query depth attacks, and injection flaws.
+
+common_patterns:
+  - Introspection enabled in production
+  - No query depth limiting
+  - Missing query complexity analysis
+  - Insufficient rate limiting
+  - Lack of field-level authorization
+  - Batch query abuse
+  - Circular query exploitation
+  - Alias-based DoS attacks
+  - Injection in resolver functions
+  - Missing input validation
+  - Exposed debug mode
+  - Overly permissive CORS policies
+
+preconditions:
+  - GraphQL API endpoint accessible
+  - Introspection queries allowed
+  - No query complexity limits
+  - Insufficient authorization checks
+  - User input passed to resolvers without validation
+  - No rate limiting on queries
+
+exploitation_requirements:
+  - Knowledge of GraphQL query syntax
+  - Ability to send GraphQL queries
+  - Tools for GraphQL testing (GraphiQL, Altair, Insomnia)
+  - Understanding of schema structure
+  - Ability to craft complex or nested queries
+
+false_positive_indicators:
+  - Introspection disabled in production
+  - Query depth and complexity limits enforced
+  - Strong field-level authorization
+  - Proper input validation in resolvers
+  - Rate limiting and query cost analysis
+  - Parameterized queries in resolvers
+  - Proper error handling without information leakage
+  - Query whitelisting or persisted queries
+
+common_attack_vectors:
+  introspection_abuse:
+    - Schema enumeration
+    - Discovering hidden fields and types
+    - Mapping entire API surface
+    - Finding deprecated fields
+  denial_of_service:
+    - Deeply nested queries
+    - Circular query references
+    - Alias-based amplification
+    - Batch query flooding
+    - Resource exhaustion
+  authorization_bypass:
+    - Accessing unauthorized fields
+    - Bypassing field-level permissions
+    - Exploiting resolver logic flaws
+    - Mutation abuse
+  injection_attacks:
+    - SQL injection in resolvers
+    - NoSQL injection in resolvers
+    - Command injection via arguments
+    - Path traversal in file resolvers
+  information_disclosure:
+    - Error message leakage
+    - Debug mode information
+    - Stack traces in responses
+    - Sensitive field exposure
+
+attack_examples:
+  introspection_query: |
+    query IntrospectionQuery {
+      __schema {
+        queryType { name }
+        mutationType { name }
+        types {
+          name
+          fields {
+            name
+            type { name }
+          }
+        }
+      }
+    }
+  
+  nested_query_dos: |
+    query NestedAttack {
+      user {
+        posts {
+          comments {
+            author {
+              posts {
+                comments {
+                  author {
+                    posts {
+                      comments {
+                        text
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  
+  alias_amplification: |
+    query AliasAttack {
+      user1: user(id: 1) { name email posts { title } }
+      user2: user(id: 1) { name email posts { title } }
+      user3: user(id: 1) { name email posts { title } }
+      # ... repeated 1000 times
+    }
+  
+  batch_query_attack: |
+    [
+      { "query": "{ users { id name email } }" },
+      { "query": "{ users { id name email } }" },
+      # ... repeated many times
+    ]
+
+detection_methods:
+  - Introspection query testing
+  - Query depth and complexity testing
+  - Alias-based amplification testing
+  - Batch query flooding
+  - Field-level authorization testing
+  - Injection testing in query arguments
+  - Error message analysis
+  - Rate limiting bypass testing
+  - Circular query testing
+  - Mutation testing without authorization
+
+mitigation:
+  - Disable introspection in production
+  - Implement query depth limiting
+  - Implement query complexity analysis
+  - Enforce rate limiting per user/IP
+  - Implement field-level authorization
+  - Validate all inputs in resolvers
+  - Use parameterized queries in resolvers
+  - Implement query cost analysis
+  - Limit batch query size
+  - Disable or limit aliases
+  - Implement proper error handling
+  - Use persisted queries or query whitelisting
+  - Implement timeout limits for queries
+  - Monitor and log suspicious query patterns
+  - Use GraphQL security tools and middleware
+  - Regular security audits of schema and resolvers
+  - Implement proper CORS policies
+  - Use query complexity scoring
+
+severity_factors:
+  critical:
+    - SQL/NoSQL injection in resolvers
+    - Complete authorization bypass
+    - Remote code execution via injection
+    - Mass data exfiltration possible
+    - Administrative mutation access
+  high:
+    - Introspection reveals sensitive schema
+    - Partial authorization bypass
+    - DoS through query complexity
+    - Significant data exposure
+    - Mutation abuse with impact
+  medium:
+    - Limited information disclosure
+    - DoS requires significant resources
+    - Minor authorization issues
+    - Limited data exposure
+  low:
+    - Minimal security impact
+    - Requires extensive effort
+    - Only affects non-sensitive data
+
+business_impact:
+  - Data breaches and privacy violations
+  - Service disruption and downtime
+  - Unauthorized data access
+  - Resource exhaustion and costs
+  - Compliance violations
+  - Reputational damage
+  - API abuse and scraping
+
+compliance_considerations:
+  - GDPR: Article 32 (Security of processing)
+  - PCI DSS: Requirement 6.5.1, 6.5.8
+  - SOC 2: CC6.1, CC6.6
+  - ISO 27001: A.14.2.5
+  - NIST: SI-10, AC-3
+
+remediation_priority: HIGH
+
+testing_tools:
+  - GraphiQL (interactive GraphQL IDE)
+  - Altair GraphQL Client
+  - Insomnia (API testing)
+  - Burp Suite (with GraphQL extensions)
+  - InQL Scanner (Burp extension)
+  - GraphQL Cop (security auditing)
+  - BatchQL (batch query testing)
+  - Graphw00f (GraphQL fingerprinting)
+
+security_best_practices:
+  - "Disable introspection in production environments"
+  - "Implement query depth limiting (max 5-7 levels)"
+  - "Use query complexity analysis and scoring"
+  - "Enforce rate limiting per user and globally"
+  - "Implement field-level authorization checks"
+  - "Validate all inputs in resolver functions"
+  - "Use persisted queries for known operations"
+  - "Limit batch query size (max 5-10 queries)"
+  - "Implement query timeouts (2-5 seconds)"
+  - "Disable or limit query aliases"
+  - "Use proper error handling without leaking info"
+  - "Monitor and alert on suspicious patterns"
+  - "Regular security audits of schema"
+  - "Use GraphQL security middleware"
+  - "Implement proper logging and monitoring"
+
+references:
+  - "OWASP GraphQL Cheat Sheet"
+  - "GraphQL Security Best Practices"
+  - "Securing GraphQL APIs - OWASP"
+  - "GraphQL Specification - Security Considerations"
+  - "API Security Top 10 - GraphQL Specific Issues"
+

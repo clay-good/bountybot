@@ -1,0 +1,74 @@
+vulnerability:
+  name: SQL Injection
+  category: A03:2021 - Injection
+  cwe: CWE-89
+  
+definition: |
+  SQL injection occurs when untrusted data is inserted into SQL queries without
+  proper sanitization, allowing attackers to modify query logic or access 
+  unauthorized data.
+
+common_patterns:
+  - String concatenation in SQL queries
+  - Dynamic query construction without parameterization
+  - Insufficient input validation
+  - Direct user input in WHERE clauses
+  - Unescaped special characters in queries
+
+preconditions:
+  - Application accepts user input
+  - User input is incorporated into SQL queries
+  - No parameterized queries or prepared statements
+  - Insufficient input validation or sanitization
+  - Database errors may be exposed to users
+
+exploitation_requirements:
+  - Ability to inject SQL metacharacters
+  - Knowledge of database schema (or ability to enumerate)
+  - No effective WAF or input filtering
+  - Application processes SQL query results
+
+false_positive_indicators:
+  - Parameterized queries are used throughout
+  - Strong input validation with whitelist approach
+  - ORM with automatic escaping is used correctly
+  - WAF blocks all injection attempts
+  - Application logic causes similar behavior without SQL injection
+
+common_payloads:
+  - "' OR 1=1--"
+  - "' UNION SELECT NULL--"
+  - "'; DROP TABLE users--"
+  - "' AND SLEEP(5)--"
+  - "admin'--"
+
+detection_methods:
+  - Boolean-based blind injection
+  - Time-based blind injection
+  - Error-based injection
+  - UNION-based injection
+  - Stacked queries
+
+mitigation:
+  - Use parameterized queries or prepared statements
+  - Implement strict input validation
+  - Apply principle of least privilege for database accounts
+  - Use ORM frameworks correctly
+  - Implement WAF rules
+  - Never expose database errors to users
+
+severity_factors:
+  high:
+    - Direct data exfiltration possible
+    - Authentication bypass achieved
+    - Administrative access gained
+    - Data modification or deletion possible
+  medium:
+    - Limited data exposure
+    - Read-only access
+    - Requires multiple steps for exploitation
+  low:
+    - Minimal impact
+    - Heavily restricted by database permissions
+    - Only affects non-sensitive data
+

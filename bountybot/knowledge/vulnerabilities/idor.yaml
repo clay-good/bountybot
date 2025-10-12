@@ -1,0 +1,81 @@
+vulnerability:
+  name: Insecure Direct Object Reference (IDOR)
+  category: A01:2021 - Broken Access Control
+  cwe: CWE-639
+  
+definition: |
+  Insecure Direct Object Reference (IDOR) occurs when an application exposes a reference
+  to an internal implementation object (such as a file, directory, database key) without
+  proper authorization checks, allowing attackers to access unauthorized data.
+
+common_patterns:
+  - Sequential or predictable IDs in URLs
+  - User IDs in API endpoints without authorization
+  - File paths or names in parameters
+  - Database keys exposed in requests
+  - UUID or GUID without permission checks
+
+preconditions:
+  - Application uses direct object references
+  - Insufficient authorization checks
+  - Predictable or enumerable identifiers
+  - No ownership validation
+
+exploitation_requirements:
+  - Ability to modify object references
+  - Knowledge of valid object identifiers
+  - No server-side authorization checks
+  - Authenticated access to application
+
+false_positive_indicators:
+  - Strong authorization checks on all endpoints
+  - Indirect reference maps used
+  - Cryptographically signed tokens
+  - Per-request authorization validation
+  - Proper session management
+
+common_attack_vectors:
+  - Incrementing numeric IDs
+  - Guessing UUIDs or GUIDs
+  - Enumerating user IDs
+  - Modifying file paths
+  - Changing resource identifiers in API calls
+
+detection_methods:
+  - Create two test accounts
+  - Access resources with different user IDs
+  - Modify ID parameters in requests
+  - Test with sequential IDs
+  - Check authorization on all CRUD operations
+  - Test with deleted or inactive resource IDs
+
+mitigation:
+  - Implement proper authorization checks
+  - Use indirect reference maps
+  - Validate user ownership of resources
+  - Use cryptographically random identifiers
+  - Implement access control lists
+  - Log and monitor access attempts
+  - Use framework-level authorization
+
+severity_factors:
+  high:
+    - Access to sensitive personal data
+    - Financial information exposure
+    - Administrative resource access
+    - Ability to modify or delete data
+  medium:
+    - Limited data exposure
+    - Non-sensitive information access
+    - Read-only access
+  low:
+    - Minimal information disclosure
+    - Public or non-sensitive data
+    - Self-referencing only
+
+examples:
+  - "/api/users/123/profile" - accessing other users' profiles
+  - "/documents/456.pdf" - accessing other users' documents
+  - "/orders/789" - viewing other customers' orders
+  - "/admin/users/delete/123" - deleting other users
+

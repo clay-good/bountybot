@@ -1,0 +1,76 @@
+vulnerability:
+  name: Server-Side Request Forgery (SSRF)
+  category: A10:2021 - Server-Side Request Forgery
+  cwe: CWE-918
+  
+definition: |
+  Server-Side Request Forgery (SSRF) occurs when an attacker can cause the server
+  to make HTTP requests to arbitrary domains, potentially accessing internal resources
+  or services that are not directly accessible from the internet.
+
+common_patterns:
+  - User-controlled URLs in HTTP requests
+  - Webhook functionality without validation
+  - URL fetching features (image proxies, PDF generators)
+  - API integrations with user-supplied endpoints
+  - File upload from URL functionality
+
+preconditions:
+  - Application makes HTTP requests based on user input
+  - Insufficient URL validation or sanitization
+  - No network segmentation or firewall rules
+  - Internal services accessible from application server
+
+exploitation_requirements:
+  - Ability to control URL or hostname in request
+  - Application processes the response
+  - No effective URL whitelist or blacklist
+  - Internal network accessible from application
+
+false_positive_indicators:
+  - Strong URL whitelist validation
+  - Network segmentation prevents internal access
+  - URL scheme restrictions (only https allowed)
+  - DNS rebinding protection
+  - Cloud metadata endpoint protection
+
+common_payloads:
+  - "http://localhost:80"
+  - "http://127.0.0.1:22"
+  - "http://169.254.169.254/latest/meta-data/"
+  - "http://internal-service:8080"
+  - "file:///etc/passwd"
+  - "gopher://internal-host:25"
+
+detection_methods:
+  - Test with localhost and 127.0.0.1
+  - Try cloud metadata endpoints
+  - Attempt to access internal IP ranges
+  - Test different URL schemes
+  - Use DNS rebinding techniques
+  - Monitor for outbound requests
+
+mitigation:
+  - Implement strict URL whitelist
+  - Validate and sanitize all URLs
+  - Use network segmentation
+  - Block access to internal IP ranges
+  - Disable unnecessary URL schemes
+  - Implement timeout and size limits
+  - Use dedicated service accounts with minimal permissions
+
+severity_factors:
+  high:
+    - Access to cloud metadata (AWS, Azure, GCP)
+    - Internal service enumeration possible
+    - Sensitive data exposure
+    - Potential for further exploitation
+  medium:
+    - Limited internal network access
+    - Port scanning capability
+    - Information disclosure
+  low:
+    - Only external URLs accessible
+    - Minimal information disclosure
+    - Strong network controls in place
+

@@ -1,0 +1,246 @@
+vulnerability:
+  name: NoSQL Injection
+  category: A03:2021 - Injection
+  cwe: CWE-943
+  owasp_api: API8:2023 - Security Misconfiguration
+  
+definition: |
+  NoSQL injection occurs when user input is improperly validated before being
+  used in NoSQL database queries (MongoDB, CouchDB, Redis, etc.). Attackers can
+  manipulate queries to bypass authentication, extract data, or execute
+  unauthorized operations by exploiting the flexible query syntax of NoSQL databases.
+
+common_patterns:
+  - Direct user input in query objects
+  - Insufficient input validation and sanitization
+  - Using eval() or similar functions with user data
+  - Improper handling of JSON input
+  - Lack of parameterized queries
+  - Trusting client-side data structures
+  - Insufficient type checking
+  - Operator injection ($where, $ne, $gt, etc.)
+
+preconditions:
+  - Application uses NoSQL database
+  - User input incorporated into queries
+  - Insufficient input validation
+  - Query construction using string concatenation or object merging
+  - Application accepts JSON or object-based input
+  - No proper sanitization of special operators
+
+exploitation_requirements:
+  - Knowledge of NoSQL query syntax
+  - Understanding of database structure
+  - Ability to manipulate request parameters
+  - Tools to craft malicious payloads
+  - Knowledge of NoSQL operators
+  - Understanding of application logic
+
+false_positive_indicators:
+  - Proper input validation and sanitization
+  - Use of parameterized queries or ORM
+  - Strict type checking on inputs
+  - Whitelist-based input validation
+  - Operator filtering and sanitization
+  - Proper error handling without information leakage
+  - Use of database-specific security features
+  - Input validation at multiple layers
+
+database_specific_attacks:
+  mongodb:
+    operators:
+      - "$ne (not equal)"
+      - "$gt, $gte (greater than)"
+      - "$lt, $lte (less than)"
+      - "$in, $nin (in array)"
+      - "$regex (regular expression)"
+      - "$where (JavaScript execution)"
+      - "$exists (field existence)"
+    payloads:
+      - '{"username": {"$ne": null}, "password": {"$ne": null}}'
+      - '{"username": {"$regex": ".*"}, "password": {"$regex": ".*"}}'
+      - '{"$where": "this.username == this.password"}'
+      - '{"username": {"$gt": ""}, "password": {"$gt": ""}}'
+  
+  couchdb:
+    - JavaScript view function injection
+    - Map/reduce function manipulation
+    - Query parameter injection
+  
+  redis:
+    - Command injection via EVAL
+    - Lua script injection
+    - Key manipulation
+  
+  cassandra:
+    - CQL injection
+    - Batch statement manipulation
+
+common_attack_vectors:
+  authentication_bypass:
+    description: "Bypass login by manipulating query logic"
+    examples:
+      - 'username[$ne]=invalid&password[$ne]=invalid'
+      - '{"username": {"$gt": ""}, "password": {"$gt": ""}}'
+      - '{"username": {"$regex": "admin"}, "password": {"$ne": ""}}'
+  
+  data_extraction:
+    description: "Extract data using operator manipulation"
+    examples:
+      - '{"username": {"$regex": "^a"}}  # Enumerate usernames'
+      - '{"price": {"$lt": 1000}}  # Extract price ranges'
+      - '{"email": {"$exists": true}}  # Find documents with email'
+  
+  javascript_injection:
+    description: "Execute arbitrary JavaScript (MongoDB $where)"
+    examples:
+      - '{"$where": "sleep(5000)"}'
+      - '{"$where": "this.password.match(/^a.*/)"}'
+      - '{"$where": "function() { /* malicious code */ }"}'
+  
+  blind_injection:
+    description: "Extract data character by character"
+    examples:
+      - '{"username": {"$regex": "^admin"}}'
+      - '{"password": {"$regex": "^a"}}  # Test first character'
+
+detection_methods:
+  - Operator injection testing ($ne, $gt, $regex, etc.)
+  - Boolean-based blind injection
+  - Time-based blind injection (sleep, $where)
+  - Error-based injection
+  - JSON payload manipulation
+  - Array injection testing
+  - Type confusion attacks
+  - Regex-based enumeration
+  - JavaScript injection ($where operator)
+
+mitigation:
+  - Validate and sanitize all user inputs
+  - Use parameterized queries or ORM/ODM
+  - Implement strict type checking
+  - Whitelist allowed query operators
+  - Sanitize or block NoSQL operators in input
+  - Use least privilege database accounts
+  - Disable dangerous operators ($where, eval)
+  - Implement proper error handling
+  - Use database-specific security features
+  - Regular security audits and code reviews
+  - Input validation at multiple layers
+  - Use schema validation
+  - Implement rate limiting
+  - Monitor and log suspicious queries
+  - Use Web Application Firewall (WAF)
+
+severity_factors:
+  critical:
+    - Authentication bypass on admin accounts
+    - Remote code execution via JavaScript injection
+    - Complete database access
+    - Data modification or deletion
+    - System command execution
+  high:
+    - Authentication bypass on user accounts
+    - Significant data extraction
+    - Privilege escalation
+    - Access to sensitive collections
+  medium:
+    - Limited data extraction
+    - Information disclosure
+    - Requires multiple steps
+    - Only affects specific endpoints
+  low:
+    - Minimal data exposure
+    - Requires significant effort
+    - Limited exploitability
+    - Only affects non-sensitive data
+
+business_impact:
+  - Unauthorized access to customer data
+  - Data breaches and privacy violations
+  - Account takeover
+  - Financial fraud
+  - Compliance violations (GDPR, PCI DSS)
+  - Reputational damage
+  - Legal liabilities
+  - Service disruption
+
+real_world_examples:
+  - "Authentication bypass using {$ne: null} operator"
+  - "User enumeration via regex-based blind injection"
+  - "Password extraction using character-by-character regex"
+  - "JavaScript execution via $where operator"
+  - "Data exfiltration using $gt/$lt operators"
+
+compliance_considerations:
+  - PCI DSS: Requirement 6.5.1
+  - GDPR: Article 32 (Security of processing)
+  - SOC 2: CC6.1, CC6.6
+  - ISO 27001: A.14.2.5
+  - NIST: SI-10, AC-3
+
+remediation_priority: CRITICAL
+
+testing_tools:
+  - Burp Suite (with NoSQL injection extensions)
+  - NoSQLMap (automated NoSQL injection)
+  - OWASP ZAP
+  - Postman (manual testing)
+  - Custom scripts for payload testing
+  - MongoDB Compass (database inspection)
+
+code_examples:
+  vulnerable_nodejs:
+    - |
+      // VULNERABLE
+      const user = await User.findOne({
+        username: req.body.username,
+        password: req.body.password
+      });
+  
+  secure_nodejs:
+    - |
+      // SECURE
+      const user = await User.findOne({
+        username: String(req.body.username),
+        password: String(req.body.password)
+      });
+      // Or use schema validation
+  
+  vulnerable_python:
+    - |
+      # VULNERABLE
+      user = db.users.find_one({
+        "username": request.json["username"],
+        "password": request.json["password"]
+      })
+  
+  secure_python:
+    - |
+      # SECURE
+      username = str(request.json.get("username", ""))
+      password = str(request.json.get("password", ""))
+      user = db.users.find_one({
+        "username": username,
+        "password": password
+      })
+
+prevention_checklist:
+  - "[ ] All user inputs validated and sanitized"
+  - "[ ] Strict type checking implemented"
+  - "[ ] NoSQL operators filtered from input"
+  - "[ ] Parameterized queries or ORM used"
+  - "[ ] $where operator disabled or restricted"
+  - "[ ] Schema validation implemented"
+  - "[ ] Least privilege database access"
+  - "[ ] Error messages don't leak information"
+  - "[ ] Rate limiting on database queries"
+  - "[ ] Monitoring and alerting configured"
+
+references:
+  - "OWASP NoSQL Injection"
+  - "MongoDB Security Checklist"
+  - "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+  - "NoSQL Injection Cheat Sheet"
+  - "OWASP Testing Guide: NoSQL Injection Testing"
+

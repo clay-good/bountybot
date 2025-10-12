@@ -1,0 +1,315 @@
+name: "Unrestricted File Upload"
+category: "Input Validation"
+severity: "HIGH"
+cwe: "CWE-434"
+owasp: "A03:2021 - Injection"
+
+description: |
+  Unrestricted file upload vulnerabilities occur when an application allows users to upload files without 
+  properly validating the file type, content, size, or name. Attackers can exploit this to upload malicious 
+  files such as web shells, executable code, or files that trigger server-side vulnerabilities. This can 
+  lead to remote code execution, defacement, denial of service, or complete system compromise.
+
+common_patterns:
+  - "Missing file type validation"
+  - "Client-side only validation"
+  - "Inadequate MIME type checking"
+  - "Missing file extension validation"
+  - "No file content inspection"
+  - "Unrestricted file size"
+  - "Predictable upload directory"
+  - "Direct file execution allowed"
+  - "Missing filename sanitization"
+  - "Double extension bypass (.php.jpg)"
+  - "Null byte injection in filename"
+  - "Case sensitivity bypass (.PhP)"
+  - "Content-Type header manipulation"
+  - "Polyglot file uploads"
+  - "Archive extraction vulnerabilities (zip slip)"
+
+attack_vectors:
+  web_shell_upload:
+    description: "Upload PHP/JSP/ASPX web shell for remote code execution"
+    payloads:
+      - "<?php system($_GET['cmd']); ?>"
+      - "<%@ Page Language='C#' %><% System.Diagnostics.Process.Start(Request['cmd']); %>"
+      - "<% Runtime.getRuntime().exec(request.getParameter('cmd')); %>"
+    file_extensions:
+      - ".php, .php3, .php4, .php5, .phtml, .phar"
+      - ".jsp, .jspx, .jsw, .jsv, .jspf"
+      - ".asp, .aspx, .cer, .asa, .asax"
+      - ".py, .rb, .pl, .cgi"
+  
+  double_extension:
+    description: "Bypass extension filters using double extensions"
+    examples:
+      - "shell.php.jpg"
+      - "backdoor.jsp.png"
+      - "webshell.asp.gif"
+  
+  null_byte_injection:
+    description: "Truncate filename validation using null byte"
+    examples:
+      - "shell.php%00.jpg"
+      - "backdoor.jsp\x00.png"
+  
+  mime_type_bypass:
+    description: "Manipulate Content-Type header to bypass MIME validation"
+    examples:
+      - "Upload shell.php with Content-Type: image/jpeg"
+      - "Upload backdoor.jsp with Content-Type: image/png"
+  
+  polyglot_files:
+    description: "Files that are valid in multiple formats"
+    examples:
+      - "GIF89a<?php system($_GET['cmd']); ?> (valid GIF + PHP)"
+      - "JPEG with embedded PHP code in EXIF data"
+      - "PNG with PHP code in metadata"
+  
+  path_traversal:
+    description: "Upload files to arbitrary locations"
+    examples:
+      - "../../etc/passwd"
+      - "../../../var/www/html/shell.php"
+      - "..\\..\\..\\windows\\system32\\evil.exe"
+  
+  archive_extraction:
+    description: "Zip slip vulnerability during archive extraction"
+    examples:
+      - "Archive containing ../../../etc/cron.d/backdoor"
+      - "Tar file with symlink to sensitive files"
+
+exploitation_requirements:
+  - "File upload functionality exists"
+  - "Insufficient validation of file type/content"
+  - "Uploaded files are accessible via web"
+  - "Server executes uploaded files OR"
+  - "Files can overwrite critical system files"
+
+detection_methods:
+  static_analysis:
+    - "Review file upload handling code"
+    - "Check for file type validation"
+    - "Verify file extension whitelist"
+    - "Check for content-based validation"
+    - "Review file storage location"
+    - "Check for filename sanitization"
+  
+  dynamic_testing:
+    - "Attempt to upload executable files (.php, .jsp, .asp)"
+    - "Test double extension bypass"
+    - "Test null byte injection"
+    - "Manipulate Content-Type header"
+    - "Upload polyglot files"
+    - "Test path traversal in filename"
+    - "Upload oversized files"
+    - "Test special characters in filename"
+    - "Upload archive files with malicious content"
+  
+  code_review_checklist:
+    - "Is file extension validated against whitelist?"
+    - "Is MIME type validated server-side?"
+    - "Is file content inspected (magic bytes)?"
+    - "Is filename sanitized?"
+    - "Are files stored outside webroot?"
+    - "Are uploaded files executed with restricted permissions?"
+    - "Is file size limited?"
+    - "Are filenames randomized?"
+
+mitigation_strategies:
+  validation:
+    - "Whitelist allowed file extensions (never blacklist)"
+    - "Validate MIME type server-side"
+    - "Inspect file content (magic bytes/file signature)"
+    - "Limit file size"
+    - "Sanitize filename (remove special characters, path traversal)"
+    - "Randomize uploaded filenames"
+  
+  storage:
+    - "Store files outside webroot"
+    - "Use separate domain for user content"
+    - "Disable script execution in upload directory"
+    - "Set restrictive file permissions"
+    - "Use object storage (S3, Azure Blob) with proper ACLs"
+  
+  execution_prevention:
+    - "Configure web server to not execute files in upload directory"
+    - "Add .htaccess: php_flag engine off"
+    - "Use Content-Disposition: attachment header"
+    - "Set X-Content-Type-Options: nosniff"
+  
+  additional_controls:
+    - "Implement antivirus scanning"
+    - "Use Content Security Policy"
+    - "Implement rate limiting"
+    - "Log all upload attempts"
+    - "Require authentication for uploads"
+
+severity_factors:
+  critical:
+    - "Remote code execution possible"
+    - "No authentication required"
+    - "Affects production environment"
+    - "Can overwrite system files"
+  
+  high:
+    - "Web shell upload possible"
+    - "Authentication required but easily obtained"
+    - "Limited file type restrictions"
+  
+  medium:
+    - "File upload possible but execution restricted"
+    - "Strong authentication required"
+    - "Limited impact (e.g., only DoS possible)"
+
+business_impact:
+  - "Complete server compromise"
+  - "Data breach and exfiltration"
+  - "Website defacement"
+  - "Malware distribution to users"
+  - "Denial of service"
+  - "Lateral movement in network"
+  - "Compliance violations (PCI DSS, HIPAA)"
+  - "Reputational damage"
+  - "Legal liability"
+
+compliance_considerations:
+  pci_dss:
+    - "Requirement 6.5.1: Injection flaws"
+    - "Requirement 6.5.8: Improper access control"
+  
+  owasp_top_10:
+    - "A03:2021 - Injection"
+    - "A04:2021 - Insecure Design"
+    - "A05:2021 - Security Misconfiguration"
+  
+  nist:
+    - "SI-10: Information Input Validation"
+    - "AC-6: Least Privilege"
+  
+  gdpr:
+    - "Article 32: Security of processing"
+
+testing_tools:
+  - "Burp Suite (Intruder, Repeater)"
+  - "OWASP ZAP"
+  - "fuxploider (automated file upload testing)"
+  - "Upload Scanner (Burp extension)"
+  - "curl/wget for manual testing"
+
+code_examples:
+  vulnerable_php: |
+    <?php
+    // VULNERABLE: No validation
+    $target_dir = "uploads/";
+    $target_file = $target_dir . basename($_FILES["file"]["name"]);
+    move_uploaded_file($_FILES["file"]["tmp_name"], $target_file);
+    ?>
+  
+  secure_php: |
+    <?php
+    // SECURE: Comprehensive validation
+    $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif'];
+    $allowed_mime_types = ['image/jpeg', 'image/png', 'image/gif'];
+    $max_size = 5 * 1024 * 1024; // 5MB
+    
+    $file = $_FILES['file'];
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    
+    // Validate extension
+    if (!in_array($extension, $allowed_extensions)) {
+        die("Invalid file extension");
+    }
+    
+    // Validate MIME type
+    if (!in_array($mime_type, $allowed_mime_types)) {
+        die("Invalid file type");
+    }
+    
+    // Validate size
+    if ($file['size'] > $max_size) {
+        die("File too large");
+    }
+    
+    // Validate image content
+    if (!getimagesize($file['tmp_name'])) {
+        die("Not a valid image");
+    }
+    
+    // Generate random filename
+    $new_filename = bin2hex(random_bytes(16)) . '.' . $extension;
+    $upload_dir = '/var/uploads/'; // Outside webroot
+    
+    move_uploaded_file($file['tmp_name'], $upload_dir . $new_filename);
+    ?>
+  
+  vulnerable_java: |
+    // VULNERABLE: No validation
+    @PostMapping("/upload")
+    public String handleFileUpload(@RequestParam("file") MultipartFile file) {
+        String filename = file.getOriginalFilename();
+        file.transferTo(new File("uploads/" + filename));
+        return "File uploaded";
+    }
+  
+  secure_java: |
+    // SECURE: Comprehensive validation
+    @PostMapping("/upload")
+    public String handleFileUpload(@RequestParam("file") MultipartFile file) {
+        List<String> allowedExtensions = Arrays.asList("jpg", "jpeg", "png", "gif");
+        List<String> allowedMimeTypes = Arrays.asList("image/jpeg", "image/png", "image/gif");
+        long maxSize = 5 * 1024 * 1024; // 5MB
+        
+        String originalFilename = file.getOriginalFilename();
+        String extension = FilenameUtils.getExtension(originalFilename).toLowerCase();
+        String mimeType = file.getContentType();
+        
+        // Validate extension
+        if (!allowedExtensions.contains(extension)) {
+            throw new IllegalArgumentException("Invalid file extension");
+        }
+        
+        // Validate MIME type
+        if (!allowedMimeTypes.contains(mimeType)) {
+            throw new IllegalArgumentException("Invalid MIME type");
+        }
+        
+        // Validate size
+        if (file.getSize() > maxSize) {
+            throw new IllegalArgumentException("File too large");
+        }
+        
+        // Generate random filename
+        String newFilename = UUID.randomUUID().toString() + "." + extension;
+        Path uploadPath = Paths.get("/var/uploads/"); // Outside webroot
+        
+        file.transferTo(uploadPath.resolve(newFilename));
+        return "File uploaded successfully";
+    }
+
+prevention_checklist:
+  - "[ ] Whitelist allowed file extensions"
+  - "[ ] Validate MIME type server-side"
+  - "[ ] Inspect file content (magic bytes)"
+  - "[ ] Limit file size"
+  - "[ ] Sanitize filename"
+  - "[ ] Randomize uploaded filenames"
+  - "[ ] Store files outside webroot"
+  - "[ ] Disable script execution in upload directory"
+  - "[ ] Set restrictive file permissions"
+  - "[ ] Implement antivirus scanning"
+  - "[ ] Use Content-Disposition: attachment"
+  - "[ ] Set X-Content-Type-Options: nosniff"
+  - "[ ] Implement rate limiting"
+  - "[ ] Log all upload attempts"
+  - "[ ] Require authentication"
+
+references:
+  - "OWASP File Upload Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html"
+  - "CWE-434: https://cwe.mitre.org/data/definitions/434.html"
+  - "PortSwigger File Upload Vulnerabilities: https://portswigger.net/web-security/file-upload"
+  - "HackerOne File Upload Reports: https://hackerone.com/reports?query=file+upload"
+

@@ -1,0 +1,76 @@
+name: "Authentication Bypass"
+cwe_id: "CWE-287, CWE-306"
+description: "Authentication bypass vulnerabilities allow attackers to gain unauthorized access to protected resources without providing valid credentials."
+
+patterns:
+  - "Missing authentication checks on sensitive endpoints"
+  - "Weak or predictable session tokens"
+  - "SQL injection in authentication logic"
+  - "JWT token manipulation"
+  - "Cookie manipulation to bypass authentication"
+  - "Parameter tampering to skip authentication"
+
+preconditions:
+  - "Application has authentication mechanism"
+  - "Protected resources exist"
+  - "Authentication logic has flaws"
+  - "No defense in depth"
+
+exploitation_indicators:
+  - "Access to protected resources without credentials"
+  - "Modified authentication tokens accepted"
+  - "SQL injection in login queries"
+  - "JWT signature not validated"
+  - "Session fixation or hijacking"
+  - "Direct object reference bypassing auth"
+
+false_positive_indicators:
+  - "Proper authentication checks on all endpoints"
+  - "Strong session management"
+  - "JWT signatures properly validated"
+  - "No evidence of unauthorized access"
+  - "Rate limiting and account lockout in place"
+
+mitigation:
+  - "Implement authentication checks on all protected endpoints"
+  - "Use strong, cryptographically secure session tokens"
+  - "Validate JWT signatures and claims"
+  - "Implement proper session management"
+  - "Use parameterized queries for authentication"
+  - "Implement multi-factor authentication"
+  - "Apply principle of least privilege"
+  - "Regular security audits of authentication logic"
+
+severity_factors:
+  critical:
+    - "Complete authentication bypass"
+    - "Access to admin functionality"
+    - "No user interaction required"
+    - "Affects all users"
+  high:
+    - "Partial authentication bypass"
+    - "Access to user accounts"
+    - "Requires some conditions"
+  medium:
+    - "Limited scope bypass"
+    - "Requires complex exploitation"
+    - "Low-privilege access only"
+
+code_patterns:
+  python:
+    - "if.*user.*==.*admin"
+    - "session\\[.*\\].*=.*True"
+    - "request.args.get\\(.*admin"
+  java:
+    - "if.*isAdmin.*==.*true"
+    - "session.setAttribute"
+    - "request.getParameter.*admin"
+  php:
+    - "\\$_SESSION\\[.*\\].*=.*true"
+    - "\\$_GET\\[.*admin"
+    - "if.*\\$user.*==.*admin"
+  javascript:
+    - "req.session.isAdmin"
+    - "req.query.admin"
+    - "if.*user.role.*===.*admin"
+

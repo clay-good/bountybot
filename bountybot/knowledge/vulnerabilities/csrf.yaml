@@ -1,0 +1,73 @@
+vulnerability:
+  name: Cross-Site Request Forgery (CSRF)
+  category: A01:2021 - Broken Access Control
+  cwe: CWE-352
+  
+definition: |
+  Cross-Site Request Forgery (CSRF) is an attack that forces an authenticated user
+  to execute unwanted actions on a web application. The attacker tricks the victim's
+  browser into sending a forged request using the victim's credentials.
+
+common_patterns:
+  - State-changing operations without CSRF tokens
+  - GET requests that modify data
+  - Missing SameSite cookie attribute
+  - No validation of request origin
+  - Predictable request parameters
+
+preconditions:
+  - Application uses cookie-based authentication
+  - State-changing operations exist
+  - No CSRF protection mechanism
+  - User is authenticated when attack occurs
+
+exploitation_requirements:
+  - Victim must be authenticated to target application
+  - Attacker can trick victim into visiting malicious page
+  - No CSRF tokens or weak implementation
+  - SameSite cookie attribute not set to Strict or Lax
+
+false_positive_indicators:
+  - Strong CSRF tokens on all state-changing operations
+  - SameSite=Strict or Lax on session cookies
+  - Custom headers required for requests
+  - Token-based authentication (not cookies)
+  - Proper origin/referer validation
+
+common_attack_vectors:
+  - Hidden forms on attacker-controlled pages
+  - Image tags with GET requests
+  - JavaScript fetch/XMLHttpRequest
+  - Link clicks
+  - Iframe embedding
+
+detection_methods:
+  - Remove CSRF token and replay request
+  - Use different user's CSRF token
+  - Check for token validation
+  - Test with GET instead of POST
+  - Verify SameSite cookie attributes
+
+mitigation:
+  - Implement synchronizer token pattern
+  - Use SameSite cookie attribute
+  - Validate Origin and Referer headers
+  - Require custom headers for state-changing operations
+  - Use double-submit cookie pattern
+  - Implement re-authentication for sensitive operations
+
+severity_factors:
+  high:
+    - Administrative actions affected
+    - Financial transactions possible
+    - Account takeover potential
+    - Data deletion or modification
+  medium:
+    - Limited scope actions
+    - Non-critical operations
+    - Requires specific conditions
+  low:
+    - Minimal impact operations
+    - Read-only actions
+    - Self-affecting only
+

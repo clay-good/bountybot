@@ -1,0 +1,75 @@
+# bountybot Configuration
+api:
+  default_provider: anthropic
+  providers:
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+      model: claude-sonnet-4-20250514
+      max_tokens: 8192
+      temperature: 0.3
+      rate_limit:
+        requests_per_minute: 50
+        tokens_per_minute: 160000
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      model: gpt-4-turbo-preview
+      max_tokens: 4096
+      temperature: 0.3
+      rate_limit:
+        requests_per_minute: 500
+        tokens_per_minute: 150000
+    gemini:
+      api_key: ${GEMINI_API_KEY}
+      model: gemini-1.5-pro
+      max_tokens: 8192
+      temperature: 0.3
+      rate_limit:
+        requests_per_minute: 60
+
+validation:
+  parallel_tasks: 4
+  cache_ttl: 3600
+  confidence_threshold: 60
+  
+code_analysis:
+  enabled: true
+  languages:
+    - python
+    - javascript
+    - java
+    - php
+    - ruby
+  exclude_patterns:
+    - "*/node_modules/*"
+    - "*/.venv/*"
+    - "*/vendor/*"
+    - "*/__pycache__/*"
+    - "*/build/*"
+    - "*/.git/*"
+  max_file_size_mb: 10
+  
+target_testing:
+  enabled: false
+  timeout_seconds: 10
+  max_requests: 20
+  safe_methods_only: true
+  respect_rate_limits: true
+  
+output:
+  formats:
+    - json
+    - markdown
+  directory: ./validation_results
+  include_timestamps: true
+  
+cost_management:
+  max_cost_per_validation: 5.00
+  max_daily_cost: 100.00
+  warning_threshold: 0.80
+  track_usage: true
+
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: bountybot.log
+

