@@ -76,12 +76,6 @@ python3 -m bountybot.cli reports/ --batch --codebase ./src
 - [Configuration](#configuration)
 - [Output Formats](#output-formats)
 - [Vulnerability Coverage](#vulnerability-coverage)
-- [Integration](#integration)
-- [Security](#security)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
 
 ---
 
