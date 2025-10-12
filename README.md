@@ -1,10 +1,10 @@
-# bountybot - Enterprise Bug Bounty Validation Framework
+# bountybot - Bug Bounty Validation Framework
 
 ## Overview
 
 ### What is bountybot?
 
-bountybot is an enterprise-grade security validation framework that automates the triage and validation of vulnerability reports from bug bounty programs. It combines AI-powered analysis with static code analysis to provide instant, confident assessments of security reports.
+bountybot is a security validation framework that automates the triage and validation of vulnerability reports from bug bounty programs. It combines AI-powered analysis with static code analysis to provide instant, confident assessments of security reports.
 
 ### Problem Statement
 
