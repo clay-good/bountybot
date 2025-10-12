@@ -1,12 +1,42 @@
 # bountybot - Enterprise Bug Bounty Validation Framework
 
-**What:** AI-powered automated validation framework for web and API security vulnerability reports
+## Overview
 
-**Who:** Security teams at bug bounty platforms, FAANG companies, financial institutions, and enterprises
+### What is bountybot?
 
-**Why:** Reduce manual triage time by 70-80%, validate vulnerabilities in seconds, save $4,500-$13,500/month
+bountybot is an enterprise-grade security validation framework that automates the triage and validation of vulnerability reports from bug bounty programs. It combines AI-powered analysis with static code analysis to provide instant, confident assessments of security reports.
 
-**How:** AI analysis + static code analysis + automated testing = instant, confident vulnerability validation
+### Problem Statement
+
+Modern security teams face critical challenges:
+
+- **Volume:** Organizations receive 100-500+ vulnerability submissions monthly
+- **False Positives:** Only 5-10% represent genuine, exploitable vulnerabilities
+- **Time:** Manual triage requires 30-60 minutes per report
+- **Cost:** Security engineers spend $50-150 per report on initial assessment
+- **Backlog:** Triage delays lead to SLA violations and missed critical vulnerabilities
+
+### Solution
+
+bountybot provides:
+
+- **Instant Analysis:** Validate reports in 10-60 seconds
+- **High Accuracy:** 70-80% reduction in manual triage time
+- **Confidence Scoring:** Clear verdicts with confidence levels
+- **Code Verification:** Static analysis to confirm vulnerabilities in source code
+- **Batch Processing:** Handle hundreds of reports automatically
+- **Professional Output:** JSON, Markdown, HTML reports with BLUF style
+
+### Value Proposition
+
+For a security team processing 100 reports per month:
+
+| Metric | Before bountybot | With bountybot | Savings |
+|--------|------------------|----------------|---------|
+| Time per report | 45 minutes | 10 minutes | 35 minutes |
+| Monthly time | 75 hours | 17 hours | 58 hours |
+| Monthly cost | $7,500 | $1,700 | $5,800 |
+| Response time | 24-48 hours | < 1 hour | Instant |
 
 ---
 
@@ -64,58 +94,6 @@ python3 -m bountybot.cli reports/ --batch --codebase ./src
 **What happens:** bountybot performs static code analysis on your codebase, searches for the vulnerable code patterns mentioned in the report, validates if the vulnerability actually exists in your code, and provides detailed findings with code locations.
 
 **Supported Languages:** Python, JavaScript, TypeScript, Java, PHP, Ruby, Go, C#
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Installation](#installation)
-- [Usage](#usage)
-- [Configuration](#configuration)
-- [Output Formats](#output-formats)
-- [Vulnerability Coverage](#vulnerability-coverage)
-
----
-
-## Overview
-
-### What is bountybot?
-
-bountybot is an enterprise-grade security validation framework that automates the triage and validation of vulnerability reports from bug bounty programs. It combines AI-powered analysis with static code analysis to provide instant, confident assessments of security reports.
-
-### Problem Statement
-
-Modern security teams face critical challenges:
-
-- **Volume:** Organizations receive 100-500+ vulnerability submissions monthly
-- **False Positives:** Only 5-10% represent genuine, exploitable vulnerabilities
-- **Time:** Manual triage requires 30-60 minutes per report
-- **Cost:** Security engineers spend $50-150 per report on initial assessment
-- **Backlog:** Triage delays lead to SLA violations and missed critical vulnerabilities
-
-### Solution
-
-bountybot provides:
-
-- **Instant Analysis:** Validate reports in 10-60 seconds
-- **High Accuracy:** 70-80% reduction in manual triage time
-- **Confidence Scoring:** Clear verdicts with confidence levels
-- **Code Verification:** Static analysis to confirm vulnerabilities in source code
-- **Batch Processing:** Handle hundreds of reports automatically
-- **Professional Output:** JSON, Markdown, HTML reports with BLUF style
-
-### Value Proposition
-
-For a security team processing 100 reports per month:
-
-| Metric | Before bountybot | With bountybot | Savings |
-|--------|------------------|----------------|---------|
-| Time per report | 45 minutes | 10 minutes | 35 minutes |
-| Monthly time | 75 hours | 17 hours | 58 hours |
-| Monthly cost | $7,500 | $1,700 | $5,800 |
-| Response time | 24-48 hours | < 1 hour | Instant |
 
 ---
 
@@ -471,8 +449,6 @@ All outputs use **Bottom Line Up Front (BLUF)** communication style:
 ```
 
 ---
-
-
 
 ## Vulnerability Coverage
 
