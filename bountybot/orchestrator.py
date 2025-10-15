@@ -13,8 +13,18 @@ from bountybot.outputs import JSONOutput, MarkdownOutput
 from bountybot.outputs.html_output import HTMLOutput
 from bountybot.extractors import HTTPRequestExtractor
 from bountybot.generators import PoCGenerator
+from bountybot.scoring import CVSSCalculator
+from bountybot.deduplication import DuplicateDetector
+from bountybot.logging import StructuredLogger, PerformanceTracker
+from bountybot.analysis import (
+    FalsePositiveDetector,
+    ExploitComplexityAnalyzer,
+    AttackChainDetector
+)
+from bountybot.prioritization import PriorityEngine
 
 logger = logging.getLogger(__name__)
+structured_logger = StructuredLogger(__name__)
 
 
 class Orchestrator:
@@ -48,29 +58,46 @@ class Orchestrator:
         # Initialize extractors and generators
         self.http_extractor = HTTPRequestExtractor()
         self.poc_generator = PoCGenerator(self.ai_provider)
+
+        # Initialize advanced features
+        self.cvss_calculator = CVSSCalculator()
+        self.duplicate_detector = DuplicateDetector(config.get('deduplication', {}))
+        self.fp_detector = FalsePositiveDetector(config.get('false_positive_detection', {}))
+        self.complexity_analyzer = ExploitComplexityAnalyzer(config.get('exploit_complexity', {}))
+        self.chain_detector = AttackChainDetector(config.get('attack_chains', {}))
+        self.priority_engine = PriorityEngine(config.get('prioritization', {}))
+
+        logger.info("Orchestrator initialized with advanced features (CVSS, dedup, FP detection, complexity, chains, prioritization)")
     
-    def validate_report(self, 
+    def validate_report(self,
                        report_path: str,
                        codebase_path: Optional[str] = None,
                        target_url: Optional[str] = None) -> ValidationResult:
         """
-        Validate a bug bounty report.
-        
+        Validate a bug bounty report with advanced features.
+
         Args:
             report_path: Path to bug bounty report file
             codebase_path: Optional path to codebase for static analysis
             target_url: Optional target URL for dynamic testing
-            
+
         Returns:
-            Validation result
+            Validation result with CVSS scoring, duplicate detection, and metrics
         """
         start_time = time.time()
+        stage_timings = {}
+
+        # Set up request tracking
+        request_id = structured_logger.set_request_id()
+        structured_logger.info("Starting validation", report_path=report_path)
 
         try:
             # Step 1: Parse report
-            logger.info(f"Parsing report: {report_path}")
-            report = self._parse_report(report_path)
-            logger.info(f"Successfully parsed report: {report.title}")
+            with PerformanceTracker("parse_report", structured_logger) as tracker:
+                logger.info(f"Parsing report: {report_path}")
+                report = self._parse_report(report_path)
+                logger.info(f"Successfully parsed report: {report.title}")
+                stage_timings['parse_report'] = time.time() - start_time
 
             # Step 1.5: Pre-validate report quality
             is_valid, errors, warnings = self.report_validator.validate(report)
@@ -131,6 +158,7 @@ class Orchestrator:
 
             # Step 7: Generate PoC if vulnerability is valid
             if result.verdict.value == 'VALID' and http_requests:
+                stage_start = time.time()
                 logger.info("Generating proof-of-concept exploit")
                 try:
                     poc = self.poc_generator.generate(report, http_requests, result)
@@ -142,10 +170,211 @@ class Orchestrator:
                         "Review the generated proof-of-concept exploit for testing")
                 except Exception as e:
                     logger.error(f"Failed to generate PoC: {e}")
+                stage_timings['generate_poc'] = time.time() - stage_start
 
-            # Calculate processing time
+            # Step 8: Calculate CVSS score
+            stage_start = time.time()
+            logger.info("Calculating CVSS score")
+            try:
+                cvss_score = self.cvss_calculator.calculate_from_report(report, result)
+                result.cvss_score = cvss_score
+                logger.info(f"CVSS Score: {cvss_score.base_score} ({cvss_score.severity_rating})")
+                structured_logger.info(
+                    "CVSS score calculated",
+                    base_score=cvss_score.base_score,
+                    severity=cvss_score.severity_rating,
+                    vector=cvss_score.vector_string
+                )
+            except Exception as e:
+                logger.error(f"Failed to calculate CVSS score: {e}")
+            stage_timings['cvss_calculation'] = time.time() - stage_start
+
+            # Step 9: Check for duplicates
+            stage_start = time.time()
+            logger.info("Checking for duplicate reports")
+            try:
+                duplicate_match = self.duplicate_detector.check_duplicate(report)
+                result.duplicate_check = duplicate_match
+                if duplicate_match.is_duplicate:
+                    logger.warning(
+                        f"Potential duplicate detected: {duplicate_match.confidence:.2%} confidence"
+                    )
+                    structured_logger.security_event(
+                        "duplicate_detected",
+                        {
+                            "confidence": duplicate_match.confidence,
+                            "matched_report": duplicate_match.matched_report_id,
+                        },
+                        severity="WARNING"
+                    )
+                else:
+                    logger.info("No duplicate detected")
+                    # Add this report to duplicate detection database
+                    self.duplicate_detector.add_report(report)
+            except Exception as e:
+                logger.error(f"Failed to check duplicates: {e}")
+            stage_timings['duplicate_check'] = time.time() - stage_start
+
+            # Step 10: False Positive Detection
+            stage_start = time.time()
+            logger.info("Analyzing for false positive indicators")
+            try:
+                fp_indicators = self.fp_detector.analyze(report, result)
+                result.false_positive_indicators = [ind['description'] for ind in fp_indicators.indicators]
+
+                if fp_indicators.is_likely_false_positive:
+                    logger.warning(
+                        f"Likely false positive detected: {fp_indicators.confidence:.1f}% confidence"
+                    )
+                    structured_logger.security_event(
+                        "false_positive_detected",
+                        {
+                            "confidence": fp_indicators.confidence,
+                            "risk_score": fp_indicators.risk_score,
+                            "indicator_count": len(fp_indicators.indicators),
+                        },
+                        severity="WARNING"
+                    )
+                    # Add to recommendations
+                    result.recommendations_security_team.append(
+                        f"⚠️  False positive likelihood: {fp_indicators.confidence:.1f}% - {fp_indicators.reasoning}"
+                    )
+                else:
+                    logger.info(f"False positive analysis: {fp_indicators.confidence:.1f}% FP confidence, {fp_indicators.risk_score:.1f} risk score")
+            except Exception as e:
+                logger.error(f"Failed to analyze false positives: {e}")
+            stage_timings['false_positive_detection'] = time.time() - stage_start
+
+            # Step 11: Exploit Complexity Analysis
+            stage_start = time.time()
+            logger.info("Analyzing exploit complexity")
+            try:
+                complexity_score = self.complexity_analyzer.analyze(report, result, result.cvss_score)
+                result.exploit_complexity_score = complexity_score.overall_score
+
+                logger.info(
+                    f"Exploit Complexity: {complexity_score.overall_score:.1f}/100 "
+                    f"(skill: {complexity_score.skill_level.value}, time: {complexity_score.time_to_exploit.value})"
+                )
+
+                # Add to recommendations
+                if complexity_score.overall_score >= 70:
+                    result.recommendations_security_team.append(
+                        f"⚡ High exploitability: {complexity_score.overall_score:.0f}/100 - "
+                        f"Can be exploited by {complexity_score.skill_level.value.replace('_', ' ')} in {complexity_score.time_to_exploit.value}"
+                    )
+                elif complexity_score.overall_score <= 30:
+                    result.recommendations_security_team.append(
+                        f"🛡️  Low exploitability: {complexity_score.overall_score:.0f}/100 - "
+                        f"Requires {complexity_score.skill_level.value.replace('_', ' ')} skill and {complexity_score.time_to_exploit.value} to exploit"
+                    )
+
+                # Add barriers to recommendations
+                if complexity_score.barriers:
+                    result.recommendations_researcher.append(
+                        f"Exploitation barriers: {', '.join(complexity_score.barriers[:3])}"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to analyze exploit complexity: {e}")
+            stage_timings['exploit_complexity'] = time.time() - stage_start
+
+            # Step 12: Attack Chain Detection
+            stage_start = time.time()
+            logger.info("Detecting attack chains")
+            try:
+                attack_chain = self.chain_detector.detect(report, result)
+
+                if attack_chain.is_chain:
+                    logger.info(
+                        f"Attack chain detected: {attack_chain.chain_length} vulnerabilities, "
+                        f"type: {attack_chain.chain_type.value if attack_chain.chain_type else 'unknown'}, "
+                        f"impact multiplier: {attack_chain.impact_multiplier:.1f}x"
+                    )
+
+                    # Add to recommendations
+                    result.recommendations_security_team.insert(0,
+                        f"🔗 Attack Chain: {attack_chain.combined_impact} "
+                        f"(impact multiplier: {attack_chain.impact_multiplier:.1f}x)"
+                    )
+
+                    # Add exploitation path
+                    if attack_chain.exploitation_path:
+                        result.recommendations_security_team.append(
+                            f"Exploitation path: {' → '.join(attack_chain.exploitation_path[:3])}"
+                        )
+
+                    structured_logger.security_event(
+                        "attack_chain_detected",
+                        {
+                            "chain_length": attack_chain.chain_length,
+                            "chain_type": attack_chain.chain_type.value if attack_chain.chain_type else None,
+                            "impact_multiplier": attack_chain.impact_multiplier,
+                        },
+                        severity="INFO"
+                    )
+                else:
+                    logger.info("No attack chain detected")
+            except Exception as e:
+                logger.error(f"Failed to detect attack chains: {e}")
+            stage_timings['attack_chain_detection'] = time.time() - stage_start
+
+            # Step 13: Calculate Priority Score
+            stage_start = time.time()
+            try:
+                logger.info("Calculating remediation priority...")
+                priority_score = self.priority_engine.calculate_priority(result)
+                result.priority_score = priority_score
+
+                logger.info(
+                    f"Priority calculated: {priority_score.priority_level.value.upper()} "
+                    f"(score: {priority_score.overall_score:.1f}/100, SLA: {priority_score.recommended_sla})"
+                )
+
+                # Add priority to recommendations
+                result.recommendations_security_team.insert(0,
+                    f"PRIORITY: {priority_score.priority_level.value.upper()} "
+                    f"(Score: {priority_score.overall_score:.1f}/100) - {priority_score.recommended_sla}"
+                )
+
+                if priority_score.escalation_required:
+                    result.recommendations_security_team.insert(1,
+                        "⚠️ ESCALATION REQUIRED: High-priority issue requiring immediate attention"
+                    )
+                    structured_logger.security_event(
+                        event_type="escalation_required",
+                        details={
+                            "report_title": report.title,
+                            "priority_score": priority_score.overall_score,
+                            "priority_level": priority_score.priority_level.value,
+                            "risk_factors": priority_score.risk_factors
+                        },
+                        severity="CRITICAL"
+                    )
+
+            except Exception as e:
+                logger.error(f"Failed to calculate priority: {e}")
+            stage_timings['priority_calculation'] = time.time() - stage_start
+
+            # Add performance metrics
+            result.stage_timings = stage_timings
             result.processing_time_seconds = time.time() - start_time
             result.total_cost = self.ai_provider.total_cost
+            result.request_id = request_id
+
+            # Get cache statistics
+            provider_stats = self.ai_provider.get_stats()
+            result.cache_hits = provider_stats['cache']['hits']
+            result.cache_misses = provider_stats['cache']['misses']
+
+            # Log completion
+            structured_logger.audit_log(
+                action="validate_report",
+                resource=report_path,
+                result=result.verdict.value,
+                confidence=result.confidence,
+                processing_time=result.processing_time_seconds,
+                cost=result.total_cost
+            )
 
             return result
 

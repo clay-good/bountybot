@@ -1,13 +1,13 @@
-import pytest
+import unittest
 from bountybot.generators import PoCGenerator, ProofOfConcept
 from bountybot.extractors import HTTPRequest
 from bountybot.models import Report, Severity
 
 
-class TestPoCGenerator:
+class TestPoCGenerator(unittest.TestCase):
     """Test PoC generation functionality."""
-    
-    def setup_method(self):
+
+    def setUp(self):
         """Set up test fixtures."""
         self.generator = PoCGenerator()
     

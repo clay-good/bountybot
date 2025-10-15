@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Installation and functionality test script for bountybot.
-This script tests that bountybot can be installed and used from scratch.
-"""
 
 import sys
 import subprocess

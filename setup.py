@@ -5,9 +5,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="bountybot",
-    version="2.0.0",
+    version="2.3.0",
     author="Security Team",
-    description="AI-powered bug bounty validation tool",
+    description="Enterprise-grade AI-powered bug bounty validation framework with REST API and webhooks",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/bountybot",
@@ -41,10 +41,18 @@ setup(
         "colorama>=0.4.6",
         "python-dateutil>=2.8.0",
         "tiktoken>=0.5.0",
+        "sqlalchemy>=2.0.0",
+        "psycopg2-binary>=2.9.0",
+        "fastapi>=0.109.0",
+        "uvicorn[standard]>=0.27.0",
+        "pydantic>=2.5.0",
+        "httpx>=0.26.0",
+        "python-multipart>=0.0.6",
     ],
     entry_points={
         "console_scripts": [
             "bountybot=bountybot.cli:main",
+            "bountybot-api=bountybot.api.cli:main",
         ],
     },
     include_package_data=True,

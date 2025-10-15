@@ -1,9 +1,3 @@
-"""
-Example vulnerable user controller for testing bountybot.
-This code contains intentional vulnerabilities for demonstration purposes.
-DO NOT USE IN PRODUCTION.
-"""
-
 import sqlite3
 from flask import Flask, request, jsonify
 

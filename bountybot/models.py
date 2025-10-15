@@ -168,8 +168,22 @@ class ValidationResult:
     recommendations_security_team: List[str] = field(default_factory=list)
     recommendations_researcher: List[str] = field(default_factory=list)
 
+    # New advanced features
+    cvss_score: Optional[Any] = None  # CVSSv31Score object
+    duplicate_check: Optional[Any] = None  # DuplicateMatch object
+    exploit_complexity_score: Optional[float] = None  # 0-100
+    false_positive_indicators: List[str] = field(default_factory=list)
+    attack_chain: Optional[Any] = None  # AttackChain object
+    priority_score: Optional[Any] = None  # PriorityScore object
+
+    # Performance metrics
+    stage_timings: Dict[str, float] = field(default_factory=dict)  # Stage name -> duration in seconds
+    cache_hits: int = 0
+    cache_misses: int = 0
+
     # Metadata
     validation_timestamp: datetime = field(default_factory=datetime.now)
+    request_id: Optional[str] = None
     ai_provider: Optional[str] = None
     ai_model: Optional[str] = None
     total_cost: float = 0.0
