@@ -58,6 +58,22 @@ attack_chains:
   min_chain_length: 2  # Minimum vulnerabilities to consider a chain
   detect_amplification: true
 
+# Dynamic security scanning
+dynamic_scanning:
+  enabled: false  # Set to true to enable (requires --target flag)
+  timeout: 10  # Request timeout in seconds
+  max_requests: 100  # Maximum requests per scan
+  delay: 0.5  # Delay between requests in seconds
+  verify_ssl: true  # Verify SSL certificates
+  user_agent: "BountyBot-Scanner/2.3.0"
+  scan_types:  # Vulnerability types to scan for
+    - sqli
+    - xss
+    - cmdi
+    - path_traversal
+    - ssrf
+    - open_redirect
+
 # Remediation prioritization
 prioritization:
   enabled: true
@@ -131,4 +147,117 @@ logging:
   structured_logging: false  # Enable JSON structured logging
   redact_sensitive: true  # Redact sensitive data in logs
   include_context: true  # Include request context in logs
+
+# Integration Hub - Connect with external tools
+integrations:
+  enabled: false  # Disabled by default - enable in production
+
+  # JIRA Integration
+  jira:
+    enabled: false
+    type: jira
+    config:
+      url: "https://your-domain.atlassian.net"
+      username: "${JIRA_USERNAME}"
+      api_token: "${JIRA_API_TOKEN}"
+      project_key: "SEC"
+      issue_type: "Bug"
+      priority_mapping:
+        CRITICAL: "Highest"
+        HIGH: "High"
+        MEDIUM: "Medium"
+        LOW: "Low"
+        INFO: "Lowest"
+    trigger_on_valid: true
+    trigger_on_invalid: false
+    trigger_on_uncertain: true
+    min_severity: "MEDIUM"
+    min_confidence: 70
+    rate_limit_enabled: true
+    max_calls_per_hour: 100
+
+  # Slack Integration
+  slack:
+    enabled: false
+    type: slack
+    config:
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      channel: "#security-alerts"
+      username: "BountyBot"
+      icon_emoji: ":shield:"
+      mention_users: []  # List of user IDs to mention for critical issues
+      mention_channels: ["here"]  # Mention @here for critical issues
+      include_details: true
+    trigger_on_valid: true
+    trigger_on_invalid: false
+    trigger_on_uncertain: true
+    min_severity: "HIGH"
+    min_confidence: 60
+    rate_limit_enabled: true
+    max_calls_per_hour: 200
+
+  # GitHub Integration
+  github:
+    enabled: false
+    type: github
+    config:
+      token: "${GITHUB_TOKEN}"
+      owner: "your-org"
+      repo: "security-issues"
+      labels: ["security", "bountybot"]
+      assignees: []  # List of GitHub usernames
+      milestone: null  # Milestone number (optional)
+    trigger_on_valid: true
+    trigger_on_invalid: false
+    trigger_on_uncertain: false
+    min_severity: "MEDIUM"
+    min_confidence: 75
+    rate_limit_enabled: true
+    max_calls_per_hour: 100
+
+  # PagerDuty Integration
+  pagerduty:
+    enabled: false
+    type: pagerduty
+    config:
+      integration_key: "${PAGERDUTY_INTEGRATION_KEY}"
+      severity_mapping:
+        CRITICAL: "critical"
+        HIGH: "error"
+        MEDIUM: "warning"
+        LOW: "info"
+        INFO: "info"
+      auto_resolve: false  # Auto-resolve incidents for invalid reports
+      dedup_key_prefix: "bountybot"
+    trigger_on_valid: true
+    trigger_on_invalid: false
+    trigger_on_uncertain: false
+    min_severity: "CRITICAL"
+    min_confidence: 80
+    rate_limit_enabled: true
+    max_calls_per_hour: 50
+
+  # Email Integration
+  email:
+    enabled: false
+    type: email
+    config:
+      smtp_host: "smtp.gmail.com"
+      smtp_port: 587
+      smtp_username: "${EMAIL_USERNAME}"
+      smtp_password: "${EMAIL_PASSWORD}"
+      use_tls: true
+      from_address: "bountybot@example.com"
+      to_addresses:
+        - "security@example.com"
+      cc_addresses: []
+      subject_prefix: "[BountyBot]"
+      include_html: true
+    trigger_on_valid: true
+    trigger_on_invalid: false
+    trigger_on_uncertain: true
+    min_severity: "HIGH"
+    min_confidence: 70
+    rate_limit_enabled: true
+    max_calls_per_hour: 100
 

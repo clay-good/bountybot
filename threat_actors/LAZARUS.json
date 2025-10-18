@@ -1,0 +1,47 @@
+{
+  "actor_id": "LAZARUS",
+  "name": "Lazarus Group",
+  "aliases": [
+    "Hidden Cobra",
+    "Guardians of Peace"
+  ],
+  "actor_type": "nation-state",
+  "sophistication": "advanced",
+  "techniques": [
+    "T1190",
+    "T1059",
+    "T1071"
+  ],
+  "tools": [
+    "WannaCry",
+    "KEYMARBLE",
+    "SHARPKNOT"
+  ],
+  "malware": [
+    "WannaCry",
+    "KEYMARBLE"
+  ],
+  "target_industries": [
+    "Financial",
+    "Cryptocurrency",
+    "Entertainment"
+  ],
+  "target_countries": [
+    "USA",
+    "South Korea",
+    "Global"
+  ],
+  "attributed_campaigns": [
+    "Sony Pictures Hack",
+    "WannaCry",
+    "Bangladesh Bank Heist"
+  ],
+  "confidence": 0.9,
+  "first_seen": "2009-01-01T00:00:00",
+  "last_seen": "2025-10-18T00:53:44.765866",
+  "description": "North Korean state-sponsored APT group",
+  "motivation": "Financial gain, Espionage, Disruption",
+  "references": [
+    "https://attack.mitre.org/groups/G0032/"
+  ]
+}

@@ -7,10 +7,10 @@ setup(
     name="bountybot",
     version="2.3.0",
     author="Security Team",
-    description="Enterprise-grade AI-powered bug bounty validation framework with REST API and webhooks",
+    description="AI-powered bug bounty validation framework with REST API and webhooks",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/bountybot",
+    url="https://github.com/clay-good/bountybot",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",

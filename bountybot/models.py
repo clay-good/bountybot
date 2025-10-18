@@ -176,6 +176,12 @@ class ValidationResult:
     attack_chain: Optional[Any] = None  # AttackChain object
     priority_score: Optional[Any] = None  # PriorityScore object
 
+    # Integration results
+    integration_results: List[Any] = field(default_factory=list)  # List of IntegrationResult objects
+
+    # Remediation plan
+    remediation_plan: Optional[Any] = None  # RemediationPlan object
+
     # Performance metrics
     stage_timings: Dict[str, float] = field(default_factory=dict)  # Stage name -> duration in seconds
     cache_hits: int = 0
@@ -206,6 +212,7 @@ class ValidationResult:
             'reasoning': self.reasoning,
             'recommendations_security_team': self.recommendations_security_team,
             'recommendations_researcher': self.recommendations_researcher,
+            'remediation_plan': self.remediation_plan.to_dict() if self.remediation_plan else None,
             'validation_timestamp': self.validation_timestamp.isoformat(),
             'ai_provider': self.ai_provider,
             'ai_model': self.ai_model,

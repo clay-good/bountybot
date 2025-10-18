@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - BountyBot{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_description %}Real-time overview of your security reports and system status{% endblock %}
+
+{% block content %}
+<div x-data="dashboardData()" x-init="init()">
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Reports -->
+        <div class="stat-card">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 rounded-lg bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                    <i class="fas fa-file-alt text-blue-500 text-xl"></i>
+                </div>
+                <span class="text-sm text-gray-400">Total</span>
+            </div>
+            <h3 class="text-3xl font-bold mb-1" x-text="stats.total_reports">0</h3>
+            <p class="text-sm text-gray-400">Reports Processed</p>
+            <div class="mt-3 flex items-center gap-2">
+                <span class="text-xs text-green-400">
+                    <i class="fas fa-arrow-up"></i>
+                    <span x-text="stats.reports_today">0</span> today
+                </span>
+            </div>
+        </div>
+        
+        <!-- Valid Reports -->
+        <div class="stat-card">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 rounded-lg bg-green-500 bg-opacity-20 flex items-center justify-center">
+                    <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                </div>
+                <span class="text-sm text-gray-400">Valid</span>
+            </div>
+            <h3 class="text-3xl font-bold mb-1 text-green-400" x-text="stats.valid_count">0</h3>
+            <p class="text-sm text-gray-400">Confirmed Vulnerabilities</p>
+            <div class="mt-3">
+                <div class="w-full bg-gray-700 rounded-full h-2">
+                    <div class="bg-green-500 h-2 rounded-full" :style="`width: ${validPercentage}%`"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Average Confidence -->
+        <div class="stat-card">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 rounded-lg bg-purple-500 bg-opacity-20 flex items-center justify-center">
+                    <i class="fas fa-brain text-purple-500 text-xl"></i>
+                </div>
+                <span class="text-sm text-gray-400">AI Confidence</span>
+            </div>
+            <h3 class="text-3xl font-bold mb-1" x-text="stats.average_confidence.toFixed(1) + '%'">0%</h3>
+            <p class="text-sm text-gray-400">Average Score</p>
+            <div class="mt-3 flex items-center gap-2">
+                <span class="text-xs" :class="stats.average_confidence >= 80 ? 'text-green-400' : 'text-yellow-400'">
+                    <i class="fas fa-circle"></i>
+                    <span x-text="stats.average_confidence >= 80 ? 'Excellent' : 'Good'">Good</span>
+                </span>
+            </div>
+        </div>
+        
+        <!-- System Health -->
+        <div class="stat-card">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 rounded-lg bg-yellow-500 bg-opacity-20 flex items-center justify-center">
+                    <i class="fas fa-heartbeat text-yellow-500 text-xl"></i>
+                </div>
+                <span class="text-sm text-gray-400">System</span>
+            </div>
+            <h3 class="text-3xl font-bold mb-1 text-green-400">Healthy</h3>
+            <p class="text-sm text-gray-400">All Systems Operational</p>
+            <div class="mt-3 flex items-center gap-2">
+                <span class="text-xs text-green-400">
+                    <i class="fas fa-check-circle"></i>
+                    <span x-text="stats.healthy_integrations + '/' + stats.active_integrations">0/0</span> integrations
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Verdict Distribution -->
+        <div class="card">
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-chart-pie text-blue-500"></i>
+                Verdict Distribution
+            </h3>
+            <canvas id="verdictChart" height="250"></canvas>
+        </div>
+        
+        <!-- Processing Time Trend -->
+        <div class="card">
+            <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                <i class="fas fa-chart-line text-purple-500"></i>
+                Processing Time Trend
+            </h3>
+            <canvas id="timeChart" height="250"></canvas>
+        </div>
+    </div>
+    
+    <!-- Recent Reports -->
+    <div class="card">
+        <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-semibold flex items-center gap-2">
+                <i class="fas fa-clock text-blue-500"></i>
+                Recent Reports
+            </h3>
+            <a href="/reports" class="text-sm text-blue-400 hover:text-blue-300">
+                View All <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Type</th>
+                        <th>Verdict</th>
+                        <th>Confidence</th>
+                        <th>Severity</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="report in recentReports" :key="report.report_id">
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-file-alt text-gray-400"></i>
+                                    <span x-text="report.title"></span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="text-sm text-gray-400" x-text="report.vulnerability_type"></span>
+                            </td>
+                            <td>
+                                <span class="badge" 
+                                      :class="{
+                                          'badge-success': report.verdict === 'VALID',
+                                          'badge-danger': report.verdict === 'INVALID',
+                                          'badge-warning': report.verdict === 'UNCERTAIN'
+                                      }"
+                                      x-text="report.verdict">
+                                </span>
+                            </td>
+                            <td>
+                                <span x-text="report.confidence + '%'"></span>
+                            </td>
+                            <td>
+                                <span class="badge"
+                                      :class="{
+                                          'badge-danger': report.severity === 'CRITICAL',
+                                          'badge-warning': report.severity === 'HIGH',
+                                          'badge-info': report.severity === 'MEDIUM'
+                                      }"
+                                      x-text="report.severity || 'N/A'">
+                                </span>
+                            </td>
+                            <td>
+                                <span class="text-sm text-gray-400" x-text="formatTime(report.submitted_at)"></span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function dashboardData() {
+    return {
+        stats: {
+            total_reports: 0,
+            reports_today: 0,
+            reports_this_week: 0,
+            reports_this_month: 0,
+            valid_count: 0,
+            invalid_count: 0,
+            uncertain_count: 0,
+            average_confidence: 0,
+            average_processing_time: 0,
+            total_cost: 0,
+            cost_today: 0,
+            active_integrations: 0,
+            healthy_integrations: 0,
+            active_webhooks: 0,
+            system_uptime: 0,
+            api_requests_today: 0
+        },
+        recentReports: [],
+        verdictChart: null,
+        timeChart: null,
+        
+        get validPercentage() {
+            const total = this.stats.total_reports;
+            return total > 0 ? (this.stats.valid_count / total * 100).toFixed(1) : 0;
+        },
+        
+        async init() {
+            await this.loadStats();
+            await this.loadRecentReports();
+            this.initCharts();
+            
+            // Auto-refresh every {{ refresh_interval }} seconds
+            setInterval(() => {
+                this.loadStats();
+                this.loadRecentReports();
+            }, {{ refresh_interval }} * 1000);
+        },
+        
+        async loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                this.stats = await response.json();
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        },
+        
+        async loadRecentReports() {
+            try {
+                const response = await fetch('/api/reports/list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ page: 1, page_size: 10, sort_by: 'submitted_at', sort_order: 'desc' })
+                });
+                const data = await response.json();
+                this.recentReports = data.reports;
+            } catch (error) {
+                console.error('Error loading recent reports:', error);
+            }
+        },
+        
+        initCharts() {
+            // Verdict Distribution Chart
+            const verdictCtx = document.getElementById('verdictChart').getContext('2d');
+            this.verdictChart = new Chart(verdictCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Valid', 'Invalid', 'Uncertain'],
+                    datasets: [{
+                        data: [this.stats.valid_count, this.stats.invalid_count, this.stats.uncertain_count],
+                        backgroundColor: ['#10b981', '#ef4444', '#f59e0b']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#cbd5e1' } }
+                    }
+                }
+            });
+            
+            // Processing Time Chart
+            const timeCtx = document.getElementById('timeChart').getContext('2d');
+            this.timeChart = new Chart(timeCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Avg Processing Time (s)',
+                        data: [2.3, 2.1, 2.5, 2.2, 2.4, 2.0, 2.3],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#cbd5e1' } }
+                    },
+                    scales: {
+                        y: { ticks: { color: '#cbd5e1' }, grid: { color: '#475569' } },
+                        x: { ticks: { color: '#cbd5e1' }, grid: { color: '#475569' } }
+                    }
+                }
+            });
+        },
+        
+        formatTime(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000);
+            
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+            return Math.floor(diff / 86400) + 'd ago';
+        }
+    }
+}
+</script>
+{% endblock %}
+

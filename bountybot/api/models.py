@@ -1,6 +1,6 @@
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class ReportInput(BaseModel):
@@ -18,8 +18,9 @@ class ReportInput(BaseModel):
     researcher_username: Optional[str] = Field(None, description="Researcher username")
     external_id: Optional[str] = Field(None, description="External platform report ID")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
-    
-    @validator('severity')
+
+    @field_validator('severity')
+    @classmethod
     def validate_severity(cls, v):
         """Validate severity level."""
         if v and v.upper() not in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'INFO']:
@@ -41,13 +42,9 @@ class ValidationOptions(BaseModel):
 
 class ValidationRequest(BaseModel):
     """Request model for single report validation."""
-    
-    report: ReportInput = Field(..., description="Vulnerability report to validate")
-    options: Optional[ValidationOptions] = Field(default_factory=ValidationOptions, description="Validation options")
-    webhook_url: Optional[str] = Field(None, description="Webhook URL for async notifications")
-    
-    class Config:
-        schema_extra = {
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "report": {
                     "title": "SQL Injection in Login Form",
@@ -65,6 +62,11 @@ class ValidationRequest(BaseModel):
                 }
             }
         }
+    )
+
+    report: ReportInput = Field(..., description="Vulnerability report to validate")
+    options: Optional[ValidationOptions] = Field(default_factory=ValidationOptions, description="Validation options")
+    webhook_url: Optional[str] = Field(None, description="Webhook URL for async notifications")
 
 
 class ValidationResult(BaseModel):
@@ -91,15 +93,9 @@ class ValidationResult(BaseModel):
 
 class ValidationResponse(BaseModel):
     """Response model for single report validation."""
-    
-    request_id: str = Field(..., description="Unique request identifier")
-    status: str = Field(..., description="Request status (completed, failed, pending)")
-    result: Optional[ValidationResult] = Field(None, description="Validation result")
-    error: Optional[str] = Field(None, description="Error message if failed")
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), description="Response timestamp")
 
-    class Config:
-        schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "request_id": "req_abc123",
                 "status": "completed",
@@ -118,16 +114,24 @@ class ValidationResponse(BaseModel):
                 "timestamp": "2025-10-15T10:30:00Z"
             }
         }
+    )
+
+    request_id: str = Field(..., description="Unique request identifier")
+    status: str = Field(..., description="Request status (completed, failed, pending)")
+    result: Optional[ValidationResult] = Field(None, description="Validation result")
+    error: Optional[str] = Field(None, description="Error message if failed")
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), description="Response timestamp")
 
 
 class BatchValidationRequest(BaseModel):
     """Request model for batch validation."""
-    
-    reports: List[ReportInput] = Field(..., description="List of reports to validate", max_items=100)
+
+    reports: List[ReportInput] = Field(..., description="List of reports to validate", max_length=100)
     options: Optional[ValidationOptions] = Field(default_factory=ValidationOptions, description="Validation options")
     webhook_url: Optional[str] = Field(None, description="Webhook URL for async notifications")
-    
-    @validator('reports')
+
+    @field_validator('reports')
+    @classmethod
     def validate_reports_count(cls, v):
         """Validate number of reports."""
         if len(v) > 100:
@@ -191,15 +195,9 @@ class WebhookPayload(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Error response model."""
-    
-    error: str = Field(..., description="Error type")
-    message: str = Field(..., description="Error message")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
-    request_id: Optional[str] = Field(None, description="Request identifier")
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), description="Error timestamp")
-    
-    class Config:
-        schema_extra = {
+
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "error": "ValidationError",
                 "message": "Invalid report format",
@@ -208,6 +206,13 @@ class ErrorResponse(BaseModel):
                 "timestamp": "2025-10-15T10:30:00Z"
             }
         }
+    )
+
+    error: str = Field(..., description="Error type")
+    message: str = Field(..., description="Error message")
+    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    request_id: Optional[str] = Field(None, description="Request identifier")
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat(), description="Error timestamp")
 
 
 class APIKeyCreate(BaseModel):

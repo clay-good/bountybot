@@ -34,6 +34,7 @@ from .auth import (
 )
 from .rate_limiter import rate_limiter
 from bountybot.webhooks import WebhookManager, WebhookDispatcher
+from bountybot.monitoring import prometheus_exporter, health_checker as monitoring_health_checker
 
 logger = logging.getLogger(__name__)
 
@@ -336,6 +337,29 @@ async def get_metrics(api_key: APIKey = Depends(get_current_user)):
         false_positive_reports=METRICS['false_positive_reports'],
         total_ai_cost=METRICS['total_ai_cost'],
         cache_hit_rate=cache_hit_rate
+    )
+
+
+@app.get("/metrics/prometheus", tags=["General"])
+async def get_prometheus_metrics():
+    """
+    Get metrics in Prometheus text format.
+
+    This endpoint exports all metrics in Prometheus exposition format
+    for scraping by Prometheus server. No authentication required for
+    Prometheus scraping.
+
+    Returns:
+        Plain text metrics in Prometheus format
+    """
+    from fastapi.responses import PlainTextResponse
+
+    # Export all metrics including health and alerts
+    metrics_text = prometheus_exporter.export_all()
+
+    return PlainTextResponse(
+        content=metrics_text,
+        media_type="text/plain; version=0.0.4"
     )
 
 

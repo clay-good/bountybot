@@ -274,11 +274,19 @@ class WebhookDispatcher:
     async def close(self):
         """Close HTTP client."""
         await self.client.aclose()
-    
+
     def __del__(self):
         """Cleanup on deletion."""
         try:
-            asyncio.create_task(self.close())
-        except:
+            # Check if there's a running event loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Schedule the close coroutine
+                asyncio.create_task(self.close())
+            else:
+                # Run the close coroutine synchronously
+                loop.run_until_complete(self.close())
+        except Exception:
+            # Silently ignore cleanup errors
             pass
 

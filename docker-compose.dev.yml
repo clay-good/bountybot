@@ -1,0 +1,103 @@
+version: '3.8'
+
+# Development Docker Compose configuration
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: bountybot-postgres-dev
+    environment:
+      POSTGRES_USER: bountybot
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: bountybot_dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - bountybot-dev-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: bountybot-redis-dev
+    ports:
+      - "6379:6379"
+    networks:
+      - bountybot-dev-network
+
+  # BountyBot API Server (Development)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bountybot-api-dev
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DATABASE_URL: postgresql://bountybot:dev_password@postgres:5432/bountybot_dev
+      REDIS_URL: redis://redis:6379/0
+      BOUNTYBOT_ENV: development
+      BOUNTYBOT_LOG_LEVEL: DEBUG
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for hot reload
+      - ./bountybot:/app/bountybot
+      - ./tests:/app/tests
+      - ./validation_results:/app/validation_results
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - bountybot-dev-network
+    command: python3 -m bountybot.api.cli --host 0.0.0.0 --port 8000 --reload
+
+  # BountyBot Dashboard (Development)
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bountybot-dashboard-dev
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DATABASE_URL: postgresql://bountybot:dev_password@postgres:5432/bountybot_dev
+      REDIS_URL: redis://redis:6379/0
+      BOUNTYBOT_ENV: development
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: 8080
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mount source code for hot reload
+      - ./bountybot:/app/bountybot
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - bountybot-dev-network
+    command: python3 -m bountybot.dashboard.cli --host 0.0.0.0 --port 8080 --reload
+
+  # Mailhog (Email testing)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: bountybot-mailhog-dev
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - bountybot-dev-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+
+networks:
+  bountybot-dev-network:
+    driver: bridge
+

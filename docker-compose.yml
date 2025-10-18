@@ -1,0 +1,200 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: bountybot-postgres
+    environment:
+      POSTGRES_USER: bountybot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bountybot_password}
+      POSTGRES_DB: bountybot
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bountybot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bountybot-network
+    restart: unless-stopped
+
+  # Redis Cache (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: bountybot-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - bountybot-network
+    restart: unless-stopped
+
+  # BountyBot API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bountybot-api
+    environment:
+      # API Configuration
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      
+      # Database Configuration
+      DATABASE_URL: postgresql://bountybot:${POSTGRES_PASSWORD:-bountybot_password}@postgres:5432/bountybot
+      
+      # Redis Configuration
+      REDIS_URL: redis://redis:6379/0
+      
+      # Application Configuration
+      BOUNTYBOT_ENV: production
+      BOUNTYBOT_LOG_LEVEL: INFO
+      BOUNTYBOT_MAX_COST_PER_RUN: 10.0
+      BOUNTYBOT_DAILY_BUDGET: 500.0
+      
+      # API Server Configuration
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      API_WORKERS: 4
+      
+      # Security
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-this-in-production}
+      API_RATE_LIMIT: 100
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./validation_results:/app/validation_results
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - bountybot-network
+    restart: unless-stopped
+    command: python3 -m bountybot.api.cli --host 0.0.0.0 --port 8000 --workers 4
+
+  # BountyBot Dashboard
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bountybot-dashboard
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      DATABASE_URL: postgresql://bountybot:${POSTGRES_PASSWORD:-bountybot_password}@postgres:5432/bountybot
+      REDIS_URL: redis://redis:6379/0
+      BOUNTYBOT_ENV: production
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: 8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - bountybot-network
+    restart: unless-stopped
+    command: python3 -m bountybot.dashboard.cli --host 0.0.0.0 --port 8080
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: bountybot-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - bountybot-network
+    restart: unless-stopped
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: bountybot-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - bountybot-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: bountybot-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+      - dashboard
+    networks:
+      - bountybot-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  bountybot-network:
+    driver: bridge
+

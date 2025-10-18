@@ -1,0 +1,255 @@
+# Prometheus Alert Rules for BountyBot
+
+groups:
+  - name: bountybot_api
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(bountybot_api_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+      # Critical error rate
+      - alert: CriticalErrorRate
+        expr: rate(bountybot_api_errors_total[5m]) > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Critical API error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      # High API latency
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.95, rate(bountybot_api_request_duration_seconds_bucket[5m])) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency detected"
+          description: "P95 API latency is {{ $value }}s (threshold: 2s)"
+
+      # API service down
+      - alert: APIServiceDown
+        expr: up{job="bountybot-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "BountyBot API service is down"
+          description: "API service has been down for more than 1 minute"
+
+  - name: bountybot_validation
+    interval: 30s
+    rules:
+      # High validation failure rate
+      - alert: HighValidationFailureRate
+        expr: rate(bountybot_validations_failed_total[10m]) / rate(bountybot_validations_completed_total[10m]) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+          component: validation
+        annotations:
+          summary: "High validation failure rate"
+          description: "Validation failure rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+
+      # Slow validation processing
+      - alert: SlowValidationProcessing
+        expr: histogram_quantile(0.95, rate(bountybot_validation_duration_seconds_bucket[10m])) > 60
+        for: 10m
+        labels:
+          severity: warning
+          component: validation
+        annotations:
+          summary: "Slow validation processing"
+          description: "P95 validation duration is {{ $value }}s (threshold: 60s)"
+
+  - name: bountybot_ai_provider
+    interval: 30s
+    rules:
+      # High AI provider error rate
+      - alert: HighAIProviderErrorRate
+        expr: rate(bountybot_ai_errors_total[5m]) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          component: ai_provider
+        annotations:
+          summary: "High AI provider error rate"
+          description: "AI provider error rate is {{ $value | humanizePercentage }} (threshold: 10%)"
+
+      # AI provider cost spike
+      - alert: AIProviderCostSpike
+        expr: rate(bountybot_ai_cost_total[1h]) > 50
+        for: 10m
+        labels:
+          severity: warning
+          component: ai_provider
+        annotations:
+          summary: "AI provider cost spike detected"
+          description: "AI cost rate is ${{ $value }}/hour (threshold: $50/hour)"
+
+      # High AI token usage
+      - alert: HighAITokenUsage
+        expr: rate(bountybot_ai_tokens_used_total[1h]) > 1000000
+        for: 10m
+        labels:
+          severity: info
+          component: ai_provider
+        annotations:
+          summary: "High AI token usage"
+          description: "AI token usage rate is {{ $value }}/hour (threshold: 1M/hour)"
+
+  - name: bountybot_system
+    interval: 30s
+    rules:
+      # System unhealthy
+      - alert: SystemUnhealthy
+        expr: bountybot_health_status < 1
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "BountyBot system is unhealthy"
+          description: "System health status is {{ $value }} (1=healthy, 0.5=degraded, 0=unhealthy)"
+
+      # Component unhealthy
+      - alert: ComponentUnhealthy
+        expr: bountybot_component_health < 1
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "BountyBot component {{ $labels.component }} is unhealthy"
+          description: "Component health status is {{ $value }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: bountybot_memory_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% (threshold: 90%)"
+
+      # Low disk space
+      - alert: LowDiskSpace
+        expr: bountybot_disk_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "Low disk space"
+          description: "Disk usage is {{ $value }}% (threshold: 90%)"
+
+      # Critical disk space
+      - alert: CriticalDiskSpace
+        expr: bountybot_disk_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical disk space"
+          description: "Disk usage is {{ $value }}% (threshold: 95%)"
+
+  - name: bountybot_database
+    interval: 30s
+    rules:
+      # Database connection failure
+      - alert: DatabaseConnectionFailure
+        expr: bountybot_component_health{component="database"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "Database connection failure"
+          description: "Cannot connect to database"
+
+      # High database query latency
+      - alert: HighDatabaseQueryLatency
+        expr: histogram_quantile(0.95, rate(bountybot_database_query_duration_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database query latency"
+          description: "P95 database query latency is {{ $value }}s (threshold: 1s)"
+
+      # High database connection count
+      - alert: HighDatabaseConnections
+        expr: bountybot_database_connections_active > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database connection count"
+          description: "Active database connections: {{ $value }} (threshold: 80)"
+
+  - name: bountybot_alerts
+    interval: 30s
+    rules:
+      # High active alert count
+      - alert: HighActiveAlertCount
+        expr: bountybot_alerts_active_total > 10
+        for: 10m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "High number of active alerts"
+          description: "Active alerts: {{ $value }} (threshold: 10)"
+
+      # Critical alerts present
+      - alert: CriticalAlertsPresent
+        expr: bountybot_alerts_active_by_severity{severity="critical"} > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Critical alerts are active"
+          description: "{{ $value }} critical alerts are currently active"
+
+  - name: bountybot_integrations
+    interval: 30s
+    rules:
+      # Integration failure
+      - alert: IntegrationFailure
+        expr: rate(bountybot_integration_failures_total[10m]) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+          component: integrations
+        annotations:
+          summary: "High integration failure rate"
+          description: "Integration {{ $labels.integration }} failure rate is {{ $value | humanizePercentage }}"
+
+      # Webhook delivery failure
+      - alert: WebhookDeliveryFailure
+        expr: rate(bountybot_webhook_delivery_failures_total[10m]) > 0.30
+        for: 10m
+        labels:
+          severity: warning
+          component: webhooks
+        annotations:
+          summary: "High webhook delivery failure rate"
+          description: "Webhook delivery failure rate is {{ $value | humanizePercentage }} (threshold: 30%)"
+

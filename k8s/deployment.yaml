@@ -1,0 +1,413 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bountybot
+  labels:
+    name: bountybot
+    environment: production
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bountybot-config
+  namespace: bountybot
+data:
+  BOUNTYBOT_ENV: "production"
+  BOUNTYBOT_LOG_LEVEL: "INFO"
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  API_WORKERS: "4"
+  BOUNTYBOT_MAX_COST_PER_RUN: "10.0"
+  BOUNTYBOT_DAILY_BUDGET: "500.0"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bountybot-secrets
+  namespace: bountybot
+type: Opaque
+stringData:
+  ANTHROPIC_API_KEY: "your-anthropic-api-key-here"
+  OPENAI_API_KEY: "your-openai-api-key-here"
+  GEMINI_API_KEY: "your-gemini-api-key-here"
+  DATABASE_URL: "postgresql://bountybot:password@postgres:5432/bountybot"
+  JWT_SECRET_KEY: "your-jwt-secret-key-here"
+  POSTGRES_PASSWORD: "your-postgres-password-here"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bountybot-api
+  namespace: bountybot
+  labels:
+    app: bountybot
+    component: api
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: bountybot
+      component: api
+  template:
+    metadata:
+      labels:
+        app: bountybot
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics/prometheus"
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/clay-good/bountybot:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bountybot-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: bountybot-secrets
+                  key: DATABASE_URL
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bountybot-secrets
+                  key: JWT_SECRET_KEY
+          envFrom:
+            - configMapRef:
+                name: bountybot-config
+          command:
+            - python3
+            - -m
+            - bountybot.api.cli
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+            - --workers
+            - "4"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: validation-results
+              mountPath: /app/validation_results
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: validation-results
+          persistentVolumeClaim:
+            claimName: bountybot-validation-results
+        - name: logs
+          persistentVolumeClaim:
+            claimName: bountybot-logs
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - bountybot
+                    - key: component
+                      operator: In
+                      values:
+                        - api
+                topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bountybot-dashboard
+  namespace: bountybot
+  labels:
+    app: bountybot
+    component: dashboard
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: bountybot
+      component: dashboard
+  template:
+    metadata:
+      labels:
+        app: bountybot
+        component: dashboard
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics/prometheus"
+    spec:
+      containers:
+        - name: dashboard
+          image: ghcr.io/clay-good/bountybot:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: bountybot-secrets
+                  key: ANTHROPIC_API_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: bountybot-secrets
+                  key: DATABASE_URL
+            - name: DASHBOARD_HOST
+              value: "0.0.0.0"
+            - name: DASHBOARD_PORT
+              value: "8080"
+          envFrom:
+            - configMapRef:
+                name: bountybot-config
+          command:
+            - python3
+            - -m
+            - bountybot.dashboard.cli
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8080"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: logs
+          persistentVolumeClaim:
+            claimName: bountybot-logs
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bountybot-api
+  namespace: bountybot
+  labels:
+    app: bountybot
+    component: api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: bountybot
+    component: api
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bountybot-dashboard
+  namespace: bountybot
+  labels:
+    app: bountybot
+    component: dashboard
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: bountybot
+    component: dashboard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bountybot-validation-results
+  namespace: bountybot
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: bountybot-logs
+  namespace: bountybot
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bountybot-ingress
+  namespace: bountybot
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  tls:
+    - hosts:
+        - api.bountybot.example.com
+        - dashboard.bountybot.example.com
+      secretName: bountybot-tls
+  rules:
+    - host: api.bountybot.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bountybot-api
+                port:
+                  number: 8000
+    - host: dashboard.bountybot.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: bountybot-dashboard
+                port:
+                  number: 8080
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bountybot-api-hpa
+  namespace: bountybot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bountybot-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bountybot-dashboard-hpa
+  namespace: bountybot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: bountybot-dashboard
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+

@@ -1,11 +1,12 @@
 import logging
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from bountybot.config_loader import ConfigLoader
 from bountybot.models import Report, ValidationResult
 from bountybot.parsers import JSONParser, MarkdownParser, TextParser
+from bountybot.parsers.html_parser import BountyHTMLParser
 from bountybot.ai_providers import AnthropicProvider
 from bountybot.validators import AIValidator, CodeAnalyzer
 from bountybot.validators.report_validator import ReportValidator
@@ -22,6 +23,9 @@ from bountybot.analysis import (
     AttackChainDetector
 )
 from bountybot.prioritization import PriorityEngine
+from bountybot.scanners import DynamicScanner
+from bountybot.integrations import IntegrationManager
+from bountybot.remediation import RemediationEngine
 
 logger = logging.getLogger(__name__)
 structured_logger = StructuredLogger(__name__)
@@ -67,7 +71,16 @@ class Orchestrator:
         self.chain_detector = AttackChainDetector(config.get('attack_chains', {}))
         self.priority_engine = PriorityEngine(config.get('prioritization', {}))
 
-        logger.info("Orchestrator initialized with advanced features (CVSS, dedup, FP detection, complexity, chains, prioritization)")
+        # Initialize dynamic scanner
+        self.dynamic_scanner = DynamicScanner(config.get('dynamic_scanning', {}))
+
+        # Initialize integration manager
+        self.integration_manager = IntegrationManager(config)
+
+        # Initialize remediation engine
+        self.remediation_engine = RemediationEngine(self.ai_provider)
+
+        logger.info("Orchestrator initialized with advanced features (CVSS, dedup, FP detection, complexity, chains, prioritization, dynamic scanning, integrations, remediation)")
     
     def validate_report(self,
                        report_path: str,
@@ -144,13 +157,40 @@ class Orchestrator:
 
             # Step 4: Dynamic testing (if target provided)
             dynamic_test = None
-            if target_url and self.config.get('target_testing', {}).get('enabled', False):
-                logger.warning("Dynamic testing not yet implemented")
+            if target_url and self.config.get('dynamic_scanning', {}).get('enabled', False):
+                stage_start = time.time()
+                logger.info(f"Running dynamic security scan on: {target_url}")
+                try:
+                    # Determine scan types based on vulnerability type
+                    scan_types = self._get_scan_types_for_vulnerability(report.vulnerability_type)
+                    dynamic_test = self.dynamic_scanner.scan(target_url, scan_types)
+
+                    if dynamic_test.findings:
+                        logger.info(f"Dynamic scan found {len(dynamic_test.findings)} issues")
+                        for finding in dynamic_test.findings:
+                            logger.info(f"  - {finding.vulnerability_type} ({finding.severity.value})")
+                    else:
+                        logger.info("Dynamic scan completed with no findings")
+
+                    structured_logger.info(
+                        "Dynamic scan completed",
+                        findings_count=len(dynamic_test.findings),
+                        requests_sent=dynamic_test.requests_sent,
+                        duration=dynamic_test.scan_duration
+                    )
+                except Exception as e:
+                    logger.error(f"Dynamic scanning failed: {e}")
+                    structured_logger.error("Dynamic scan error", error=str(e))
+                stage_timings['dynamic_scan'] = time.time() - stage_start
 
             # Step 5: AI validation
             logger.info("Running AI validation")
             result = self.ai_validator.validate(report, code_analysis, dynamic_test)
             logger.info(f"AI validation complete: {result.verdict.value} ({result.confidence}% confidence)")
+
+            # Add dynamic test results to validation result
+            if dynamic_test:
+                result.dynamic_test = dynamic_test
 
             # Step 6: Add extracted HTTP requests to result
             result.extracted_http_requests = http_requests
@@ -366,6 +406,50 @@ class Orchestrator:
             result.cache_hits = provider_stats['cache']['hits']
             result.cache_misses = provider_stats['cache']['misses']
 
+            # Step 13.5: Generate Remediation Plan
+            stage_start = time.time()
+            try:
+                logger.info("Generating remediation plan...")
+                vulnerable_code = report.proof_of_concept if report.proof_of_concept else None
+                remediation_plan = self.remediation_engine.generate_remediation_plan(
+                    report=report,
+                    validation_result=result,
+                    codebase_path=codebase_path,
+                    vulnerable_code=vulnerable_code
+                )
+                result.remediation_plan = remediation_plan
+                logger.info(f"Generated remediation plan with {len(remediation_plan.code_fixes)} code fixes, "
+                           f"{len(remediation_plan.waf_rules)} WAF rules, "
+                           f"{len(remediation_plan.compensating_controls)} compensating controls")
+            except Exception as e:
+                logger.error(f"Failed to generate remediation plan: {e}")
+            stage_timings['remediation_plan'] = time.time() - stage_start
+
+            # Step 14: Execute Integrations
+            stage_start = time.time()
+            try:
+                if self.config.get('integrations', {}).get('enabled', False):
+                    logger.info("Executing integrations...")
+                    integration_results = self.integration_manager.execute_integrations(result)
+                    result.integration_results = integration_results
+
+                    # Log integration results
+                    success_count = sum(1 for r in integration_results if r.status.value == 'SUCCESS')
+                    logger.info(f"Integrations executed: {success_count}/{len(integration_results)} successful")
+
+                    for int_result in integration_results:
+                        if int_result.status.value == 'SUCCESS':
+                            logger.info(f"  ✓ {int_result.integration_name}: {int_result.message}")
+                            if int_result.external_url:
+                                logger.info(f"    URL: {int_result.external_url}")
+                        else:
+                            logger.warning(f"  ✗ {int_result.integration_name}: {int_result.message}")
+                else:
+                    logger.debug("Integrations disabled")
+            except Exception as e:
+                logger.error(f"Failed to execute integrations: {e}")
+            stage_timings['integrations'] = time.time() - stage_start
+
             # Log completion
             structured_logger.audit_log(
                 action="validate_report",
@@ -399,17 +483,52 @@ class Orchestrator:
         
         # Determine parser based on file extension
         extension = path.suffix.lower()
-        
+
         if extension == '.json':
             parser = JSONParser()
         elif extension in ['.md', '.markdown']:
             parser = MarkdownParser()
+        elif extension in ['.html', '.htm']:
+            parser = BountyHTMLParser()
         else:
             # Default to text parser
             parser = TextParser()
-        
+
         return parser.parse(path)
-    
+
+    def _get_scan_types_for_vulnerability(self, vulnerability_type: Optional[str]) -> List[str]:
+        """
+        Determine which scan types to run based on reported vulnerability type.
+
+        Args:
+            vulnerability_type: Reported vulnerability type
+
+        Returns:
+            List of scan types to perform
+        """
+        if not vulnerability_type:
+            # Run all scans if type unknown
+            return ['sqli', 'xss', 'cmdi', 'path_traversal', 'ssrf', 'open_redirect']
+
+        vuln_lower = vulnerability_type.lower()
+
+        # Map vulnerability types to scan types
+        if 'sql' in vuln_lower or 'injection' in vuln_lower:
+            return ['sqli']
+        elif 'xss' in vuln_lower or 'cross-site scripting' in vuln_lower:
+            return ['xss']
+        elif 'command' in vuln_lower:
+            return ['cmdi']
+        elif 'path' in vuln_lower or 'traversal' in vuln_lower or 'lfi' in vuln_lower:
+            return ['path_traversal']
+        elif 'ssrf' in vuln_lower:
+            return ['ssrf']
+        elif 'redirect' in vuln_lower:
+            return ['open_redirect']
+        else:
+            # Run all scans for unknown types
+            return ['sqli', 'xss', 'cmdi', 'path_traversal', 'ssrf', 'open_redirect']
+
     def save_results(self, result: ValidationResult, output_formats: list, output_dir: str):
         """
         Save validation results in specified formats.

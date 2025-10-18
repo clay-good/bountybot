@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - BountyBot{% endblock %}
+
+{% block page_title %}Reports{% endblock %}
+{% block page_description %}Manage and track all security vulnerability reports{% endblock %}
+
+{% block content %}
+<div x-data="reportsData()" x-init="init()">
+    <!-- Filters -->
+    <div class="card mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium mb-2">Verdict</label>
+                <select x-model="filters.verdict" @change="loadReports()" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                    <option value="">All</option>
+                    <option value="VALID">Valid</option>
+                    <option value="INVALID">Invalid</option>
+                    <option value="UNCERTAIN">Uncertain</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Severity</label>
+                <select x-model="filters.severity" @change="loadReports()" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                    <option value="">All</option>
+                    <option value="CRITICAL">Critical</option>
+                    <option value="HIGH">High</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="LOW">Low</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Type</label>
+                <select x-model="filters.vulnerability_type" @change="loadReports()" class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+                    <option value="">All Types</option>
+                    <option value="SQL Injection">SQL Injection</option>
+                    <option value="XSS">XSS</option>
+                    <option value="CSRF">CSRF</option>
+                    <option value="Authentication">Authentication</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2">Search</label>
+                <input type="text" x-model="filters.search_query" @input.debounce.500ms="loadReports()" 
+                       placeholder="Search reports..." 
+                       class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Reports Table -->
+    <div class="card">
+        <div class="overflow-x-auto">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Type</th>
+                        <th>Verdict</th>
+                        <th>Confidence</th>
+                        <th>Severity</th>
+                        <th>Researcher</th>
+                        <th>Submitted</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="report in reports" :key="report.report_id">
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-file-alt text-gray-400"></i>
+                                    <span x-text="report.title" class="font-medium"></span>
+                                </div>
+                            </td>
+                            <td><span class="text-sm text-gray-400" x-text="report.vulnerability_type"></span></td>
+                            <td>
+                                <span class="badge" 
+                                      :class="{
+                                          'badge-success': report.verdict === 'VALID',
+                                          'badge-danger': report.verdict === 'INVALID',
+                                          'badge-warning': report.verdict === 'UNCERTAIN'
+                                      }"
+                                      x-text="report.verdict">
+                                </span>
+                            </td>
+                            <td><span x-text="report.confidence + '%'"></span></td>
+                            <td>
+                                <span class="badge"
+                                      :class="{
+                                          'badge-danger': report.severity === 'CRITICAL',
+                                          'badge-warning': report.severity === 'HIGH',
+                                          'badge-info': report.severity === 'MEDIUM'
+                                      }"
+                                      x-text="report.severity || 'N/A'">
+                                </span>
+                            </td>
+                            <td><span class="text-sm text-gray-400" x-text="report.researcher || 'Anonymous'"></span></td>
+                            <td><span class="text-sm text-gray-400" x-text="formatDate(report.submitted_at)"></span></td>
+                            <td>
+                                <button class="text-blue-400 hover:text-blue-300 mr-2">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-gray-400 hover:text-gray-300">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-6 pt-6 border-t border-gray-700">
+            <div class="text-sm text-gray-400">
+                Showing <span x-text="((page - 1) * pageSize) + 1"></span> to 
+                <span x-text="Math.min(page * pageSize, total)"></span> of 
+                <span x-text="total"></span> reports
+            </div>
+            <div class="flex gap-2">
+                <button @click="prevPage()" :disabled="!hasPrev" 
+                        class="btn btn-primary" :class="{'opacity-50 cursor-not-allowed': !hasPrev}">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button @click="nextPage()" :disabled="!hasNext"
+                        class="btn btn-primary" :class="{'opacity-50 cursor-not-allowed': !hasNext}">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function reportsData() {
+    return {
+        reports: [],
+        filters: {
+            verdict: '',
+            severity: '',
+            vulnerability_type: '',
+            search_query: ''
+        },
+        page: 1,
+        pageSize: 20,
+        total: 0,
+        hasNext: false,
+        hasPrev: false,
+        
+        async init() {
+            await this.loadReports();
+        },
+        
+        async loadReports() {
+            try {
+                const response = await fetch('/api/reports/list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        page: this.page,
+                        page_size: this.pageSize,
+                        ...this.filters,
+                        sort_by: 'submitted_at',
+                        sort_order: 'desc'
+                    })
+                });
+                const data = await response.json();
+                this.reports = data.reports;
+                this.total = data.total;
+                this.hasNext = data.has_next;
+                this.hasPrev = data.has_prev;
+            } catch (error) {
+                console.error('Error loading reports:', error);
+            }
+        },
+        
+        nextPage() {
+            if (this.hasNext) {
+                this.page++;
+                this.loadReports();
+            }
+        },
+        
+        prevPage() {
+            if (this.hasPrev) {
+                this.page--;
+                this.loadReports();
+            }
+        },
+        
+        formatDate(timestamp) {
+            return new Date(timestamp).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    }
+}
+</script>
+{% endblock %}
+

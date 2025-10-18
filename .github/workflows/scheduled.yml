@@ -1,0 +1,333 @@
+name: Scheduled Tasks
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # Job 1: Dependency Updates Check
+  dependency-check:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-audit pip-tools
+      
+      - name: Check for vulnerabilities
+        run: |
+          pip-audit --desc --format json --output audit-report.json || true
+          pip-audit --desc
+        continue-on-error: true
+      
+      - name: Check for outdated packages
+        run: |
+          pip list --outdated --format json > outdated-packages.json || true
+          pip list --outdated
+        continue-on-error: true
+      
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dependency-reports
+          path: |
+            audit-report.json
+            outdated-packages.json
+      
+      - name: Create issue if vulnerabilities found
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('audit-report.json', 'utf8'));
+            
+            if (report.vulnerabilities && report.vulnerabilities.length > 0) {
+              github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🔒 Security vulnerabilities detected in dependencies',
+                body: `Automated security scan found ${report.vulnerabilities.length} vulnerabilities.\n\nPlease review and update dependencies.`,
+                labels: ['security', 'dependencies']
+              });
+            }
+
+  # Job 2: Code Quality Metrics
+  code-metrics:
+    name: Collect Code Quality Metrics
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install radon lizard
+      
+      - name: Calculate code complexity
+        run: |
+          radon cc bountybot/ -a -s -j > complexity-report.json || true
+          radon cc bountybot/ -a -s
+        continue-on-error: true
+      
+      - name: Calculate maintainability index
+        run: |
+          radon mi bountybot/ -s -j > maintainability-report.json || true
+          radon mi bountybot/ -s
+        continue-on-error: true
+      
+      - name: Calculate code metrics with Lizard
+        run: |
+          lizard bountybot/ -o lizard-report.html || true
+          lizard bountybot/
+        continue-on-error: true
+      
+      - name: Upload metrics
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: code-metrics
+          path: |
+            complexity-report.json
+            maintainability-report.json
+            lizard-report.html
+
+  # Job 3: Test Coverage Report
+  coverage-report:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-cov coverage
+      
+      - name: Run tests with coverage
+        run: |
+          python -m pytest tests/ -v --cov=bountybot --cov-report=html --cov-report=json --cov-report=term
+      
+      - name: Generate coverage badge
+        run: |
+          coverage json
+          python -c "import json; data = json.load(open('coverage.json')); print(f\"Coverage: {data['totals']['percent_covered']:.1f}%\")"
+      
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+
+  # Job 4: Performance Benchmarks
+  performance-benchmarks:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-benchmark
+      
+      - name: Run benchmarks
+        run: |
+          python -m pytest tests/ -v -m benchmark --benchmark-only --benchmark-json=benchmark.json
+        continue-on-error: true
+      
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        if: always()
+        with:
+          tool: 'pytest'
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+
+  # Job 5: Docker Image Cleanup
+  docker-cleanup:
+    name: Clean Up Old Docker Images
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    
+    steps:
+      - name: Delete old container images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'bountybot'
+          package-type: 'container'
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: 'true'
+
+  # Job 6: Database Backup (if applicable)
+  database-backup:
+    name: Backup Production Database
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Backup database
+        run: |
+          echo "Running database backup..."
+          # Add database backup commands here
+          # Examples:
+          # - pg_dump for PostgreSQL
+          # - mysqldump for MySQL
+          # - mongodump for MongoDB
+      
+      - name: Upload backup to S3
+        run: |
+          echo "Uploading backup to S3..."
+          # Add S3 upload commands here
+          # aws s3 cp backup.sql s3://bountybot-backups/$(date +%Y%m%d)/
+
+  # Job 7: Health Check Monitoring
+  health-check:
+    name: Monitor Service Health
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check production health
+        run: |
+          echo "Checking production health..."
+          # Add health check commands here
+          # curl -f https://bountybot.example.com/health || exit 1
+      
+      - name: Check staging health
+        run: |
+          echo "Checking staging health..."
+          # Add health check commands here
+          # curl -f https://staging.bountybot.example.com/health || exit 1
+      
+      - name: Create issue if health check fails
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Service health check failed',
+              body: 'Automated health check detected service issues. Please investigate immediately.',
+              labels: ['critical', 'monitoring']
+            });
+
+  # Job 8: License Compliance Check
+  license-check:
+    name: Check License Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pip-licenses
+      
+      - name: Generate license report
+        run: |
+          pip-licenses --format=json --output-file=licenses.json
+          pip-licenses --format=markdown --output-file=licenses.md
+      
+      - name: Upload license report
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: |
+            licenses.json
+            licenses.md
+
+  # Job 9: Documentation Update Check
+  documentation-check:
+    name: Check Documentation Freshness
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check for outdated documentation
+        run: |
+          # Find Python files modified in last 30 days
+          RECENT_CODE=$(git log --since="30 days ago" --name-only --pretty=format: -- "*.py" | sort -u | wc -l)
+          
+          # Find documentation files modified in last 30 days
+          RECENT_DOCS=$(git log --since="30 days ago" --name-only --pretty=format: -- "*.md" "docs/*" | sort -u | wc -l)
+          
+          echo "Code files modified: $RECENT_CODE"
+          echo "Documentation files modified: $RECENT_DOCS"
+          
+          # If code changed but docs didn't, create reminder
+          if [ $RECENT_CODE -gt 10 ] && [ $RECENT_DOCS -eq 0 ]; then
+            echo "Documentation may need updating"
+            exit 1
+          fi
+      
+      - name: Create documentation reminder
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '📚 Documentation may need updating',
+              body: 'Recent code changes detected without corresponding documentation updates. Please review and update documentation as needed.',
+              labels: ['documentation']
+            });
+
