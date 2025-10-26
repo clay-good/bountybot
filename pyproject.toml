@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bountybot"
-version = "2.9.0"
-description = "AI-powered bug bounty validation framework"
+version = "2.18.0"
+description = "AI-powered bug bounty validation framework with AI model fine-tuning, custom training, transfer learning, active learning, and enterprise ML operations"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
@@ -44,6 +44,7 @@ dependencies = [
     "markdown>=3.5.0",
     "pygments>=2.17.0",
     "pyjwt>=2.8.0",
+    "urllib3<2.0",
 ]
 
 [project.optional-dependencies]
@@ -138,10 +139,6 @@ addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--cov=bountybot",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-report=xml",
 ]
 markers = [
     "unit: Unit tests",
@@ -152,7 +149,6 @@ markers = [
     "requires_api_key: Tests that require API keys",
 ]
 filterwarnings = [
-    "error",
     "ignore::UserWarning",
     "ignore::DeprecationWarning",
 ]

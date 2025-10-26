@@ -172,16 +172,14 @@ class BountyHTMLParser(BaseParser):
         # Create report object
         report = Report(
             title=title,
-            description=full_description,
+            researcher=submitted_by or None,
+            submission_date=submitted_at,
             vulnerability_type=self._normalize_vulnerability_type(vuln_type),
             severity=severity,
-            steps_to_reproduce=steps or None,
+            reproduction_steps=steps if steps else [],
             proof_of_concept=poc or None,
-            impact=impact or None,
-            submitted_by=submitted_by or None,
-            submitted_at=submitted_at,
-            target_url=target_url or None,
-            raw_report=html_content[:5000]  # Store first 5000 chars
+            impact_description=impact or None,
+            raw_content=html_content[:5000]  # Store first 5000 chars
         )
         
         logger.info(f"Successfully parsed HTML report: {report.title}")

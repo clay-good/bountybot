@@ -1,0 +1,20 @@
+apiVersion: v2
+name: bountybot
+description: Enterprise-grade AI-powered bug bounty validation framework with AI model fine-tuning and custom training
+type: application
+version: 2.18.0
+appVersion: "2.18.0"
+keywords:
+  - security
+  - bug-bounty
+  - vulnerability-management
+  - ai
+  - machine-learning
+home: https://github.com/clay-good/bountybot
+sources:
+  - https://github.com/clay-good/bountybot
+maintainers:
+  - name: Security Team
+    email: security@example.com
+icon: https://raw.githubusercontent.com/clay-good/bountybot/main/docs/logo.png
+

@@ -182,6 +182,13 @@ class ValidationResult:
     # Remediation plan
     remediation_plan: Optional[Any] = None  # RemediationPlan object
 
+    # Bug bounty-specific features
+    researcher_reputation: Optional[Any] = None  # ResearcherReputation object
+    payout_recommendation: Optional[Any] = None  # PayoutRecommendation object
+    clustering_result: Optional[Any] = None  # ClusteringResult object
+    similar_reports: List[Any] = field(default_factory=list)  # List of similar report IDs
+    suggested_response: Optional[Any] = None  # GeneratedResponse object
+
     # Performance metrics
     stage_timings: Dict[str, float] = field(default_factory=dict)  # Stage name -> duration in seconds
     cache_hits: int = 0

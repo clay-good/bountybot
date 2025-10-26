@@ -191,9 +191,9 @@ class PagerDutyIntegration(BaseIntegration):
         
         # Generate deduplication key if not provided
         if not dedup_key:
-            # Use report title hash for deduplication
+            # Use report title hash for deduplication (SHA256 for security)
             import hashlib
-            title_hash = hashlib.md5(report.title.encode()).hexdigest()[:8]
+            title_hash = hashlib.sha256(report.title.encode()).hexdigest()[:16]
             dedup_key = f"{self.dedup_key_prefix}-{title_hash}"
         
         # Determine severity

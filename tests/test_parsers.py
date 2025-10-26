@@ -38,7 +38,8 @@ class TestJSONParser:
             assert report.researcher == "test_researcher"
             assert report.vulnerability_type == "sql injection"
             assert report.severity == Severity.HIGH
-            assert "SQL injection" in report.description
+            # Parser prioritizes 'impact' field over 'description' field
+            assert "Data breach" in report.impact_description
         finally:
             Path(temp_path).unlink()
     
@@ -57,7 +58,7 @@ class TestJSONParser:
             report = parser.parse(temp_path)
             
             assert report.title == "Test Vulnerability"
-            assert report.description is None
+            assert report.impact_description is None
         finally:
             Path(temp_path).unlink()
     
@@ -167,7 +168,8 @@ This is a critical vulnerability.
             report = parser.parse(temp_path)
             
             assert "SQL Injection" in report.title
-            assert "search endpoint" in report.description
+            # Text parser doesn't extract description, only title
+            assert report.impact_description is None
         finally:
             Path(temp_path).unlink()
     

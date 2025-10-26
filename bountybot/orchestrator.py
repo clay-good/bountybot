@@ -7,7 +7,11 @@ from bountybot.config_loader import ConfigLoader
 from bountybot.models import Report, ValidationResult
 from bountybot.parsers import JSONParser, MarkdownParser, TextParser
 from bountybot.parsers.html_parser import BountyHTMLParser
-from bountybot.ai_providers import AnthropicProvider
+from bountybot.ai_providers import AnthropicProvider, OPENAI_AVAILABLE, GEMINI_AVAILABLE
+if OPENAI_AVAILABLE:
+    from bountybot.ai_providers import OpenAIProvider
+if GEMINI_AVAILABLE:
+    from bountybot.ai_providers import GeminiProvider
 from bountybot.validators import AIValidator, CodeAnalyzer
 from bountybot.validators.report_validator import ReportValidator
 from bountybot.outputs import JSONOutput, MarkdownOutput
@@ -26,6 +30,10 @@ from bountybot.prioritization import PriorityEngine
 from bountybot.scanners import DynamicScanner
 from bountybot.integrations import IntegrationManager
 from bountybot.remediation import RemediationEngine
+from bountybot.researcher_reputation import ReputationManager
+from bountybot.bounty_payout import PayoutEngine
+from bountybot.report_clustering import ReportClusteringEngine, SemanticSimilarityAnalyzer
+from bountybot.communication import ResponseGenerator
 
 logger = logging.getLogger(__name__)
 structured_logger = StructuredLogger(__name__)
@@ -48,11 +56,19 @@ class Orchestrator:
         # Initialize AI provider
         provider_name = config['api']['default_provider']
         provider_config = config['api']['providers'][provider_name]
-        
+
         if provider_name == 'anthropic':
             self.ai_provider = AnthropicProvider(provider_config)
+        elif provider_name == 'openai':
+            if not OPENAI_AVAILABLE:
+                raise ImportError("OpenAI provider requested but openai package not installed. Install with: pip install openai")
+            self.ai_provider = OpenAIProvider(provider_config)
+        elif provider_name == 'gemini':
+            if not GEMINI_AVAILABLE:
+                raise ImportError("Gemini provider requested but google-generativeai package not installed. Install with: pip install google-generativeai")
+            self.ai_provider = GeminiProvider(provider_config)
         else:
-            raise ValueError(f"Unsupported AI provider: {provider_name}")
+            raise ValueError(f"Unsupported AI provider: {provider_name}. Supported: anthropic, openai, gemini")
         
         # Initialize validators
         self.ai_validator = AIValidator(self.ai_provider)
@@ -80,7 +96,20 @@ class Orchestrator:
         # Initialize remediation engine
         self.remediation_engine = RemediationEngine(self.ai_provider)
 
-        logger.info("Orchestrator initialized with advanced features (CVSS, dedup, FP detection, complexity, chains, prioritization, dynamic scanning, integrations, remediation)")
+        # Initialize reputation manager
+        self.reputation_manager = ReputationManager()
+
+        # Initialize bounty payout engine
+        self.payout_engine = PayoutEngine(config.get('bounty_payout', {}))
+
+        # Initialize report clustering engine
+        self.clustering_engine = ReportClusteringEngine()
+        self.similarity_analyzer = SemanticSimilarityAnalyzer()
+
+        # Initialize communication assistant
+        self.response_generator = ResponseGenerator()
+
+        logger.info("Orchestrator initialized with advanced features (CVSS, dedup, FP detection, complexity, chains, prioritization, dynamic scanning, integrations, remediation, reputation, payout, clustering, communication)")
     
     def validate_report(self,
                        report_path: str,
@@ -450,6 +479,78 @@ class Orchestrator:
                 logger.error(f"Failed to execute integrations: {e}")
             stage_timings['integrations'] = time.time() - stage_start
 
+            # Step 15: Update Researcher Reputation
+            stage_start = time.time()
+            try:
+                if hasattr(report, 'researcher_id') and report.researcher_id:
+                    logger.info(f"Updating reputation for researcher {report.researcher_id}")
+                    researcher_username = getattr(report, 'researcher_username', None)
+                    reputation = self.reputation_manager.update_reputation(
+                        researcher_id=report.researcher_id,
+                        validation_result=result,
+                        username=researcher_username
+                    )
+                    result.researcher_reputation = reputation
+
+                    # Log reputation insights
+                    logger.info(
+                        f"Researcher reputation: {reputation.reputation_score.overall:.1f}/100, "
+                        f"trust={reputation.trust_level.value}, "
+                        f"fast_track={reputation.should_fast_track}"
+                    )
+
+                    # Add reputation insights to recommendations
+                    if reputation.should_fast_track:
+                        result.recommendations_security_team.insert(0,
+                            f"⚡ FAST-TRACK: Trusted researcher (reputation: {reputation.reputation_score.overall:.1f}/100) - "
+                            f"Priority level {reputation.fast_track.priority_level}, saves ~{reputation.fast_track.estimated_time_savings_minutes}min"
+                        )
+
+                    if reputation.is_spam_risk:
+                        result.recommendations_security_team.insert(0,
+                            f"⚠️ SPAM RISK: Researcher flagged as potential spam (risk: {reputation.spam_indicators.risk_score:.0f}/100) - "
+                            f"Review carefully"
+                        )
+
+                    structured_logger.info(
+                        "Researcher reputation updated",
+                        researcher_id=report.researcher_id,
+                        reputation_score=reputation.reputation_score.overall,
+                        trust_level=reputation.trust_level.value,
+                        fast_track=reputation.should_fast_track
+                    )
+            except Exception as e:
+                logger.error(f"Failed to update researcher reputation: {e}")
+            stage_timings['reputation_update'] = time.time() - stage_start
+
+            # Step 16: Calculate Bounty Payout Recommendation
+            stage_start = time.time()
+            try:
+                if result.verdict.value == 'VALID':
+                    logger.info("Calculating bounty payout recommendation")
+                    reputation = getattr(result, 'researcher_reputation', None)
+                    payout_recommendation = self.payout_engine.calculate_payout(
+                        validation_result=result,
+                        researcher_reputation=reputation
+                    )
+                    result.payout_recommendation = payout_recommendation
+
+                    logger.info(
+                        f"Payout recommendation: ${payout_recommendation.recommended_amount:,.2f} "
+                        f"({payout_recommendation.severity_tier.value}, "
+                        f"range: ${payout_recommendation.min_amount:,.2f}-${payout_recommendation.max_amount:,.2f})"
+                    )
+
+                    # Add payout to recommendations
+                    result.recommendations_security_team.insert(0,
+                        f"💰 PAYOUT: ${payout_recommendation.recommended_amount:,.2f} "
+                        f"({payout_recommendation.severity_tier.value.upper()}, "
+                        f"confidence: {payout_recommendation.confidence:.0%})"
+                    )
+            except Exception as e:
+                logger.error(f"Failed to calculate payout recommendation: {e}")
+            stage_timings['payout_calculation'] = time.time() - stage_start
+
             # Log completion
             structured_logger.audit_log(
                 action="validate_report",
@@ -465,7 +566,77 @@ class Orchestrator:
         except Exception as e:
             logger.error(f"Error during validation: {e}")
             raise
-    
+
+    def analyze_report_clustering(self, reports: List[Any], min_cluster_size: int = 2) -> Any:
+        """
+        Analyze clustering and similarity across multiple reports.
+
+        Args:
+            reports: List of reports to analyze
+            min_cluster_size: Minimum cluster size
+
+        Returns:
+            ClusteringResult object
+        """
+        logger.info(f"Analyzing clustering for {len(reports)} reports")
+        return self.clustering_engine.cluster_reports(
+            reports=reports,
+            min_cluster_size=min_cluster_size
+        )
+
+    def find_similar_reports(self, report: Any, candidate_reports: List[Any], threshold: float = 0.7) -> Any:
+        """
+        Find similar reports to a given report.
+
+        Args:
+            report: Report to analyze
+            candidate_reports: List of candidate reports
+            threshold: Similarity threshold
+
+        Returns:
+            SimilarityAnalysis object
+        """
+        logger.info(f"Finding similar reports for report {getattr(report, 'report_id', 'unknown')}")
+        return self.similarity_analyzer.analyze_similarity(
+            report=report,
+            candidate_reports=candidate_reports,
+            threshold=threshold
+        )
+
+    def generate_communication_response(
+        self,
+        scenario: Any,
+        context: Dict[str, Any],
+        language: Any = None,
+        tone: Any = None
+    ) -> Any:
+        """
+        Generate communication response for a scenario.
+
+        Args:
+            scenario: Communication scenario
+            context: Context dictionary
+            language: Target language (optional)
+            tone: Desired tone (optional)
+
+        Returns:
+            GeneratedResponse object
+        """
+        from bountybot.communication import Language, ToneType
+
+        if language is None:
+            language = Language.ENGLISH
+        if tone is None:
+            tone = ToneType.PROFESSIONAL
+
+        logger.info(f"Generating communication response for scenario {scenario}")
+        return self.response_generator.generate_response(
+            scenario=scenario,
+            context=context,
+            language=language,
+            tone=tone
+        )
+
     def _parse_report(self, report_path: str) -> Report:
         """
         Parse report file based on extension.

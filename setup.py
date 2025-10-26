@@ -5,9 +5,9 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="bountybot",
-    version="2.3.0",
+    version="2.18.0",
     author="Security Team",
-    description="AI-powered bug bounty validation framework with REST API and webhooks",
+    description="AI-powered bug bounty validation framework with AI model fine-tuning, custom training, transfer learning, active learning, and enterprise ML operations",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/clay-good/bountybot",

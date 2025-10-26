@@ -84,9 +84,9 @@ curl -X POST https://example.com/api/search \
         """Test identification of command injection payload."""
         text = "; cat /etc/passwd"
         assert self.extractor._looks_like_payload(text) is True
-        
+
         text = "| whoami"
-        assert self.extractor._looks_like_payload(text) is False  # Simple pipe not detected
+        assert self.extractor._looks_like_payload(text) is True  # Pipe command injection detected
     
     def test_validate_valid_request(self):
         """Test validation of valid HTTP request."""

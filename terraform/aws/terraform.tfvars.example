@@ -1,0 +1,44 @@
+# AWS Configuration
+aws_region     = "us-east-1"
+aws_account_id = "123456789012"
+environment    = "prod"
+project_name   = "bountybot"
+
+# VPC Configuration
+vpc_cidr             = "10.0.0.0/16"
+availability_zones   = ["us-east-1a", "us-east-1b", "us-east-1c"]
+private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnet_cidrs  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+# EKS Configuration
+node_group_min_size     = 3
+node_group_max_size     = 20
+node_group_desired_size = 5
+node_instance_types     = ["t3.xlarge"]
+
+# RDS Configuration
+db_instance_class         = "db.t3.large"
+db_allocated_storage      = 100
+db_max_allocated_storage  = 500
+db_username               = "bountybot"
+db_password               = "CHANGE_ME_STRONG_PASSWORD"
+db_backup_retention_days  = 30
+
+# Redis Configuration
+redis_node_type               = "cache.t3.medium"
+redis_num_nodes               = 3
+redis_auth_token              = "CHANGE_ME_STRONG_TOKEN"
+redis_snapshot_retention_days = 7
+
+# API Keys (use AWS Secrets Manager or environment variables in production)
+anthropic_api_key = "sk-ant-..."
+openai_api_key    = "sk-..."
+gemini_api_key    = "..."
+jwt_secret        = "CHANGE_ME_STRONG_SECRET"
+
+# Backup Configuration
+backup_retention_days = 90
+
+# Logging Configuration
+log_retention_days = 30
+

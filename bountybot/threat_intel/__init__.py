@@ -29,6 +29,28 @@ from .vulnerability_intelligence import VulnerabilityIntelligenceEngine
 from .threat_actor_profiler import ThreatActorProfiler
 from .risk_contextualizer import RiskContextualizer
 
+# New v2.10.0 components
+from .correlation_engine import (
+    ThreatCorrelationEngine,
+    ThreatCorrelation,
+    CorrelationStrength
+)
+from .exploit_predictor import (
+    ExploitPredictor,
+    ExploitPrediction,
+    ExploitLikelihood
+)
+from .threat_hunter import (
+    ThreatHunter,
+    ThreatHunt,
+    HuntingPriority,
+    HuntingStatus
+)
+from .enrichment_pipeline import (
+    ThreatIntelligenceEnrichmentPipeline,
+    EnrichedValidation
+)
+
 __all__ = [
     # Models
     'CVEData',
@@ -43,7 +65,7 @@ __all__ = [
     'ThreatSeverity',
     'ExploitMaturity',
     'VulnerabilityStatus',
-    
+
     # Core Components
     'CVEEnricher',
     'ExploitCorrelator',
@@ -53,5 +75,19 @@ __all__ = [
     'VulnerabilityIntelligenceEngine',
     'ThreatActorProfiler',
     'RiskContextualizer',
+
+    # v2.10.0 - Advanced Security Intelligence
+    'ThreatCorrelationEngine',
+    'ThreatCorrelation',
+    'CorrelationStrength',
+    'ExploitPredictor',
+    'ExploitPrediction',
+    'ExploitLikelihood',
+    'ThreatHunter',
+    'ThreatHunt',
+    'HuntingPriority',
+    'HuntingStatus',
+    'ThreatIntelligenceEnrichmentPipeline',
+    'EnrichedValidation',
 ]
 

@@ -207,3 +207,22 @@ $RECYCLE.BIN/
 # Test files
 test_output/
 *.test.py
+test_output.log
+test_output.txt
+demo_test_results.log
+comprehensive_test_results.txt
+
+# BountyBot specific
+bountybot.log
+*.log
+cve_cache/
+exploit_cache/
+ioc_data/
+mitre_data/
+threat_actors/
+vuln_intel/
+models/
+benchmark_results.json
+
+# Temporary files
+=2.8.0

@@ -18,13 +18,20 @@ class HTTPRequest:
     body: Optional[str] = None
     query_params: Dict[str, List[str]] = field(default_factory=dict)
     cookies: Dict[str, str] = field(default_factory=dict)
-    
+
     # Metadata
     raw_request: Optional[str] = None
     extraction_confidence: float = 0.0
     extraction_method: Optional[str] = None
     payload_locations: List[str] = field(default_factory=list)
-    
+
+    def __post_init__(self):
+        """Parse query params from URL if not already set."""
+        if not self.query_params and self.url:
+            parsed = urlparse(self.url)
+            if parsed.query:
+                self.query_params = parse_qs(parsed.query)
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -211,7 +218,8 @@ class HTTPRequestExtractor:
             
             # Construct full URL
             if host:
-                scheme = 'https' if 'https' in text.lower() else 'http'
+                # Default to HTTPS for security
+                scheme = 'https'
                 url = f"{scheme}://{host}{path}"
             else:
                 url = path
@@ -291,9 +299,13 @@ class HTTPRequestExtractor:
                     ck, cv = cookie.split('=', 1)
                     cookies[ck.strip()] = cv.strip()
         
-        # Extract body
+        # Extract body - handle both quoted and unquoted
         body = None
-        body_match = re.search(r'(?:-d|--data|--data-raw)\s+["\']([^"\']+)["\']', curl_cmd)
+        # Try single quotes first
+        body_match = re.search(r"(?:-d|--data|--data-raw)\s+'([^']+)'", curl_cmd, re.DOTALL)
+        if not body_match:
+            # Try double quotes
+            body_match = re.search(r'(?:-d|--data|--data-raw)\s+"([^"]+)"', curl_cmd, re.DOTALL)
         if body_match:
             body = body_match.group(1)
         
@@ -399,6 +411,8 @@ class HTTPRequestExtractor:
             r'system\(',
             r'cmd=',
             r'command=',
+            r';\s*(cat|ls|whoami|id|pwd)',  # Command injection
+            r'\|\s*(cat|ls|whoami|id|pwd)',  # Pipe command injection
         ]
 
         value_lower = value.lower()

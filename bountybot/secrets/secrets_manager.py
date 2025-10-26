@@ -263,14 +263,14 @@ class SecretsManager:
     ) -> Secret:
         """
         Rotate a secret (generate new value).
-        
+
         Args:
             secret_id: Secret identifier
             rotated_by: User rotating the secret
-            
+
         Returns:
             Rotated secret
-            
+
         Raises:
             SecretNotFoundError: If secret not found
         """
@@ -279,8 +279,14 @@ class SecretsManager:
             if not secret:
                 raise SecretNotFoundError(f"Secret not found: {secret_id}")
             return secret
+        elif self.backend_type == BackendType.VAULT:
+            # For Vault backend, rotate by creating a new version
+            secret = self.backend.rotate_secret(secret_id, rotated_by)
+            if not secret:
+                raise SecretNotFoundError(f"Secret not found: {secret_id}")
+            return secret
         else:
-            raise NotImplementedError("Secret rotation not implemented for Vault backend")
+            raise NotImplementedError(f"Secret rotation not implemented for {self.backend_type.value} backend")
     
     def get_or_create_secret(
         self,

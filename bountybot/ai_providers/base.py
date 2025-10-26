@@ -12,6 +12,11 @@ import threading
 logger = logging.getLogger(__name__)
 
 
+class CircuitBreakerError(Exception):
+    """Exception raised when circuit breaker is open or unavailable."""
+    pass
+
+
 class CircuitState(Enum):
     """Circuit breaker states."""
     CLOSED = "closed"  # Normal operation
@@ -57,7 +62,7 @@ class CircuitBreaker:
             Function result
 
         Raises:
-            Exception: If circuit is open or function fails
+            CircuitBreakerError: If circuit is open or unavailable
         """
         with self.lock:
             if self.state == CircuitState.OPEN:
@@ -66,11 +71,11 @@ class CircuitBreaker:
                     self.state = CircuitState.HALF_OPEN
                     self.half_open_calls = 0
                 else:
-                    raise Exception(f"Circuit breaker is OPEN. Service unavailable. Retry after {self.timeout}s")
+                    raise CircuitBreakerError(f"Circuit breaker is OPEN. Service unavailable. Retry after {self.timeout}s")
 
             if self.state == CircuitState.HALF_OPEN:
                 if self.half_open_calls >= self.half_open_max_calls:
-                    raise Exception("Circuit breaker is HALF_OPEN. Max test calls reached")
+                    raise CircuitBreakerError("Circuit breaker is HALF_OPEN. Max test calls reached")
                 self.half_open_calls += 1
 
         try:

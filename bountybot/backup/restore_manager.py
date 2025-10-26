@@ -134,7 +134,8 @@ class RestoreManager:
             # Clean up temp file
             try:
                 os.unlink(backup_file)
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file: {e}")
                 pass
             
             # Update metadata
@@ -189,7 +190,8 @@ class RestoreManager:
             # Remove compressed file
             try:
                 os.unlink(file_path)
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to remove compressed file: {e}")
                 pass
 
             logger.info(f"Decompressed backup: {decompressed_file}")

@@ -1,0 +1,277 @@
+# Default values for bountybot
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 3
+
+image:
+  repository: bountybot/bountybot
+  pullPolicy: IfNotPresent
+  tag: "2.17.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: bountybot.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: bountybot-tls
+      hosts:
+        - bountybot.example.com
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - bountybot
+          topologyKey: kubernetes.io/hostname
+
+# Environment variables
+env:
+  - name: ENVIRONMENT
+    value: "production"
+  - name: LOG_LEVEL
+    value: "INFO"
+  - name: ENABLE_TRACING
+    value: "true"
+  - name: ENABLE_METRICS
+    value: "true"
+
+# Secrets (use external secrets operator or sealed secrets in production)
+secrets:
+  anthropicApiKey: ""
+  openaiApiKey: ""
+  geminiApiKey: ""
+  databaseUrl: ""
+  redisUrl: ""
+  jwtSecret: ""
+
+# PostgreSQL configuration
+postgresql:
+  enabled: true
+  auth:
+    username: bountybot
+    password: changeme
+    database: bountybot
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: changeme
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+# Jaeger tracing
+jaeger:
+  enabled: true
+  agent:
+    host: jaeger-agent
+    port: 6831
+
+# Backup configuration
+backup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: 30  # days
+  storage:
+    type: s3
+    bucket: bountybot-backups
+    region: us-east-1
+
+# WebSocket configuration
+websocket:
+  enabled: true
+  port: 8765
+  service:
+    type: ClusterIP
+    port: 8765
+
+# GraphQL configuration
+graphql:
+  enabled: true
+  playground: false  # Disable in production
+
+# Worker configuration (for async tasks)
+worker:
+  enabled: true
+  replicaCount: 5
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+# Celery configuration
+celery:
+  broker: redis
+  backend: redis
+  concurrency: 4
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Network policies
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      ports:
+      - protocol: TCP
+        port: 8000
+  egress:
+    - to:
+      - namespaceSelector: {}
+      ports:
+      - protocol: TCP
+        port: 5432  # PostgreSQL
+      - protocol: TCP
+        port: 6379  # Redis
+      - protocol: TCP
+        port: 443   # External APIs
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Priority class
+priorityClassName: ""
+
+# Init containers
+initContainers:
+  - name: wait-for-db
+    image: busybox:1.35
+    command: ['sh', '-c', 'until nc -z postgresql 5432; do echo waiting for db; sleep 2; done;']
+
+# Volume mounts
+volumeMounts:
+  - name: tmp
+    mountPath: /tmp
+  - name: cache
+    mountPath: /app/cache
+
+volumes:
+  - name: tmp
+    emptyDir: {}
+  - name: cache
+    emptyDir:
+      sizeLimit: 1Gi
+

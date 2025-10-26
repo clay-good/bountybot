@@ -561,7 +561,8 @@ def create_dashboard_app(config: Optional[Dict[str, Any]] = None) -> FastAPI:
                     try:
                         if integration.test_connection():
                             healthy_count += 1
-                    except:
+                    except Exception as e:
+                        logger.warning(f"Integration {name} health check failed: {e}")
                         pass
 
                 integrations_health = {

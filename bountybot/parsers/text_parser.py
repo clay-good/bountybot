@@ -17,17 +17,21 @@ class TextParser(BaseParser):
     def parse(self, content: Union[str, Path]) -> Report:
         """
         Parse plain text report into standardized Report object.
-        
+
         Args:
             content: Text string or path to text file
-            
+
         Returns:
             Standardized Report object
         """
         # Read file if path provided
-        if isinstance(content, Path):
-            content = self._read_file(content)
-        
+        if isinstance(content, (Path, str)) and (isinstance(content, Path) or Path(content).exists()):
+            content = self._read_file(Path(content) if isinstance(content, str) else content)
+
+        # Validate content
+        if not content or not content.strip():
+            raise ValueError("Empty content provided")
+
         # For plain text, we extract minimal information
         # The title is the first non-empty line
         lines = [line.strip() for line in content.split('\n') if line.strip()]

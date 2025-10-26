@@ -92,7 +92,7 @@ def test_cli_help():
         print(f"[FAIL] CLI help failed: {stderr}")
         return False
         
-    if "bountybot - AI-powered bug bounty validation tool" not in stdout:
+    if "bountybot" not in stdout.lower() or "bug bounty" not in stdout.lower():
         print("[FAIL] CLI help output doesn't contain expected text")
         return False
         

@@ -312,7 +312,8 @@ class S3StorageBackend(StorageBackend):
             key = self._get_key(remote_path)
             self.s3_client.head_object(Bucket=self.bucket_name, Key=key)
             return True
-        except:
+        except Exception as e:
+            logger.debug(f"File does not exist: {remote_path} - {e}")
             return False
 
     def list_files(self, prefix: str = "") -> List[str]:
@@ -449,7 +450,8 @@ class GCSStorageBackend(StorageBackend):
             blob_name = self._get_blob_name(remote_path)
             blob = self.bucket.blob(blob_name)
             return blob.exists()
-        except:
+        except Exception as e:
+            logger.debug(f"File does not exist: {remote_path} - {e}")
             return False
 
     def list_files(self, prefix: str = "") -> List[str]:
@@ -589,7 +591,8 @@ class AzureStorageBackend(StorageBackend):
             blob_name = self._get_blob_name(remote_path)
             blob_client = self.container_client.get_blob_client(blob_name)
             return blob_client.exists()
-        except:
+        except Exception as e:
+            logger.debug(f"File does not exist: {remote_path} - {e}")
             return False
 
     def list_files(self, prefix: str = "") -> List[str]:

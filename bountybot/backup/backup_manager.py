@@ -163,7 +163,8 @@ class BackupManager:
             # Clean up temp file
             try:
                 os.unlink(backup_file)
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file: {e}")
                 pass
 
             logger.info(f"Backup completed: {backup_id} ({metadata.compressed_size_bytes / 1024 / 1024:.2f} MB)")

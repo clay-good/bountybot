@@ -198,7 +198,8 @@ class VaultBackend:
                     mount_point=self.mount_point
                 )
                 custom_metadata = metadata_info.get('data', {}).get('custom_metadata', {})
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to read secret metadata: {e}")
                 custom_metadata = {}
             
             # Parse metadata
@@ -299,28 +300,85 @@ class VaultBackend:
     def list_secrets(self) -> List[str]:
         """
         List all secret IDs in Vault.
-        
+
         Returns:
             List of secret IDs
         """
         if not self.enabled:
             logger.warning("Vault backend not enabled")
             return []
-        
+
         try:
             response = self.client.secrets.kv.v2.list_secrets(
                 path='',
                 mount_point=self.mount_point
             )
-            
+
             if not response or 'data' not in response:
                 return []
-            
+
             return response['data'].get('keys', [])
-            
+
         except Exception as e:
             logger.error(f"Failed to list secrets from Vault: {e}")
             return []
+
+    def rotate_secret(self, secret_id: str, rotated_by: Optional[str] = None) -> Optional[Secret]:
+        """
+        Rotate a secret in Vault (generate new value and create new version).
+
+        Args:
+            secret_id: Secret identifier
+            rotated_by: User rotating the secret
+
+        Returns:
+            Rotated secret or None if failed
+        """
+        if not self.enabled:
+            logger.warning("Vault backend not enabled")
+            return None
+
+        try:
+            # Get current secret to determine type
+            current_secret = self.get_secret(secret_id)
+            if not current_secret:
+                logger.error(f"Secret not found for rotation: {secret_id}")
+                return None
+
+            # Generate new value based on secret type
+            import secrets as py_secrets
+            import string
+
+            secret_type = current_secret.metadata.secret_type
+
+            if secret_type == SecretType.API_KEY:
+                # Generate 64-character hex API key
+                new_value = py_secrets.token_hex(32)
+            elif secret_type == SecretType.PASSWORD:
+                # Generate 32-character strong password
+                alphabet = string.ascii_letters + string.digits + string.punctuation
+                new_value = ''.join(py_secrets.choice(alphabet) for _ in range(32))
+            elif secret_type == SecretType.TOKEN:
+                # Generate 128-character URL-safe token
+                new_value = py_secrets.token_urlsafe(96)
+            elif secret_type == SecretType.ENCRYPTION_KEY:
+                # Generate 256-bit encryption key (base64 encoded)
+                new_value = py_secrets.token_urlsafe(32)
+            else:
+                # For generic secrets, generate a secure random string
+                new_value = py_secrets.token_urlsafe(32)
+
+            # Update secret with new value
+            rotated_secret = self.update_secret(secret_id, new_value, rotated_by)
+
+            if rotated_secret:
+                logger.info(f"Rotated secret in Vault: {secret_id} by {rotated_by or 'system'}")
+
+            return rotated_secret
+
+        except Exception as e:
+            logger.error(f"Failed to rotate secret in Vault: {e}")
+            return None
 
 
 __all__ = ['VaultBackend']

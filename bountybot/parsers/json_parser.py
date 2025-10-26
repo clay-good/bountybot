@@ -20,16 +20,16 @@ class JSONParser(BaseParser):
     def parse(self, content: Union[str, Path]) -> Report:
         """
         Parse JSON report into standardized Report object.
-        
+
         Args:
             content: JSON string or path to JSON file
-            
+
         Returns:
             Standardized Report object
         """
         # Read file if path provided
-        if isinstance(content, Path):
-            content = self._read_file(content)
+        if isinstance(content, (Path, str)) and (isinstance(content, Path) or Path(content).exists()):
+            content = self._read_file(Path(content) if isinstance(content, str) else content)
         
         try:
             data = json.loads(content)

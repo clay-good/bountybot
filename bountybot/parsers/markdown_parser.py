@@ -20,16 +20,16 @@ class MarkdownParser(BaseParser):
     def parse(self, content: Union[str, Path]) -> Report:
         """
         Parse Markdown report into standardized Report object.
-        
+
         Args:
             content: Markdown string or path to markdown file
-            
+
         Returns:
             Standardized Report object
         """
         # Read file if path provided
-        if isinstance(content, Path):
-            content = self._read_file(content)
+        if isinstance(content, (Path, str)) and (isinstance(content, Path) or Path(content).exists()):
+            content = self._read_file(Path(content) if isinstance(content, str) else content)
         
         # Extract title (first H1 or H2)
         title = self._extract_title(content)
