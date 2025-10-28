@@ -1,12 +1,8 @@
 # 🛡️ BountyBot - AI-Powered Bug Bounty Validation Platform
 
-**Enterprise-grade automated validation for bug bounty programs**
+**Automated validation for bug bounty programs**
 
 BountyBot is an intelligent platform that validates reported security vulnerabilities before payout, ensuring organizations only pay for **real, exploitable threats** in their **actual codebase**.
-
-[![Tests](https://img.shields.io/badge/tests-1035%20passing-brightgreen)](./tests)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 ---
 
@@ -233,16 +229,6 @@ payout:
 
 ---
 
-## 📖 Documentation
-
-- **[Getting Started Guide](./docs/guides/GETTING_STARTED.md)** - Detailed setup instructions
-- **[Validation Enhancements](./docs/VALIDATION_COMPLETE.md)** - Deep dive into validation features
-- **[API Reference](./docs/API_REFERENCE.md)** - Complete API documentation
-- **[Deployment Guide](./docs/DEPLOYMENT.md)** - Production deployment instructions
-- **[CI/CD Integration](./docs/CICD.md)** - Continuous integration setup
-
----
-
 ## 🎮 Demos
 
 See **[DEMOS.md](./DEMOS.md)** for comprehensive demo instructions.
@@ -313,37 +299,6 @@ helm install bountybot ./helm/bountybot \
   --set codebasePath=/app/code
 ```
 
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](./docs/CONTRIBUTING.md) for guidelines.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-Built with:
-- [Anthropic Claude](https://www.anthropic.com/) - AI-powered validation
-- [OpenAI GPT](https://openai.com/) - Alternative AI provider
-- [AST](https://docs.python.org/3/library/ast.html) - Python code analysis
-- [pytest](https://pytest.org/) - Testing framework
-
----
-
-## 📞 Contact & Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/bountybot/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/bountybot/discussions)
-- **Email**: security@yourdomain.com
-
----
 
 **Made with ❤️ for security teams worldwide**
 
