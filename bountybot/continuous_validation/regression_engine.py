@@ -17,6 +17,7 @@ from .models import (
     VerificationStatus,
     VulnerabilityLifecycle
 )
+from bountybot.validators.poc_executor import PoCExecutor, ExecutionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -29,18 +30,21 @@ class RegressionTestingEngine:
     def __init__(self, config: Optional[Dict] = None):
         """
         Initialize regression testing engine.
-        
+
         Args:
             config: Configuration dictionary
         """
         self.config = config or {}
         self.regression_tests: Dict[str, RegressionTest] = {}
-        
+
         # Configuration
         self.max_retries = self.config.get('max_retries', 3)
         self.retry_delay_seconds = self.config.get('retry_delay_seconds', 60)
         self.parallel_tests = self.config.get('parallel_tests', 5)
-        
+
+        # Initialize PoC executor for real PoC execution
+        self.poc_executor = PoCExecutor(config=self.config.get('poc_executor', {}))
+
         logger.info("RegressionTestingEngine initialized")
     
     async def create_regression_test(
@@ -194,12 +198,11 @@ class RegressionTestingEngine:
     ) -> Dict[str, Any]:
         """
         Execute PoC replay test.
-        
+
         Replays the original proof-of-concept to see if vulnerability still exists.
         """
-        # Simulate PoC replay (in production, this would actually replay the PoC)
-        await asyncio.sleep(0.5)  # Simulate test execution
-        
+        logger.info(f"Executing PoC replay for test {test.test_id}")
+
         # Check if PoC config exists
         poc_config = test.test_config.get('poc_config', {})
         if not poc_config:
@@ -209,46 +212,113 @@ class RegressionTestingEngine:
                 'findings': ['No PoC configuration available for replay'],
                 'evidence': []
             }
-        
-        # Simulate PoC execution
-        # In production, this would:
-        # 1. Extract PoC from original validation
-        # 2. Execute PoC against target
-        # 3. Compare results with original
-        
-        # For demo, randomly determine if regression exists (weighted toward no regression)
-        import random
-        regression_detected = random.random() < 0.15  # 15% chance of regression
-        
-        if regression_detected:
-            return {
-                'regression_detected': True,
-                'confidence_score': 0.85,
-                'findings': [
-                    'PoC successfully exploited vulnerability',
-                    'Vulnerability appears to have regressed',
-                    'Original fix may have been reverted or broken'
-                ],
-                'evidence': [
-                    {'type': 'http_response', 'status_code': 200, 'contains_exploit': True},
-                    {'type': 'exploit_success', 'details': 'Vulnerability exploited successfully'}
-                ],
-                'changes_detected': ['Vulnerability is exploitable again'],
-                'severity_change': 'unchanged'
-            }
-        else:
+
+        # Check if target URL is provided
+        if not target_url:
             return {
                 'regression_detected': False,
-                'confidence_score': 0.90,
-                'findings': [
-                    'PoC failed to exploit vulnerability',
-                    'Fix appears to be still effective',
-                    'No regression detected'
+                'confidence_score': 0.0,
+                'findings': ['No target URL provided for PoC execution'],
+                'evidence': []
+            }
+
+        try:
+            # Extract PoC from original validation
+            poc = None
+            if original_validation and 'generated_poc' in original_validation:
+                poc = original_validation['generated_poc']
+            elif 'poc' in poc_config:
+                poc = poc_config['poc']
+
+            if not poc:
+                return {
+                    'regression_detected': False,
+                    'confidence_score': 0.3,
+                    'findings': ['No PoC available for execution'],
+                    'evidence': []
+                }
+
+            # Execute PoC against target using real PoC executor
+            vulnerability_type = poc_config.get('vulnerability_type', 'Unknown')
+            execution_result = await self.poc_executor.execute_poc(
+                poc=poc,
+                target_url=target_url,
+                vulnerability_type=vulnerability_type
+            )
+
+            # Analyze execution result
+            if execution_result.status == ExecutionStatus.UNSAFE:
+                return {
+                    'regression_detected': False,
+                    'confidence_score': 0.0,
+                    'findings': ['PoC deemed unsafe to execute'],
+                    'evidence': execution_result.safety_violations
+                }
+
+            if execution_result.status == ExecutionStatus.ERROR:
+                return {
+                    'regression_detected': False,
+                    'confidence_score': 0.2,
+                    'findings': ['PoC execution failed with errors'],
+                    'evidence': execution_result.errors
+                }
+
+            # Check if vulnerability was confirmed
+            regression_detected = execution_result.vulnerability_confirmed
+
+            if regression_detected:
+                return {
+                    'regression_detected': True,
+                    'confidence_score': execution_result.confidence,
+                    'findings': [
+                        'PoC successfully exploited vulnerability',
+                        'Vulnerability appears to have regressed',
+                        'Original fix may have been reverted or broken'
+                    ] + execution_result.evidence,
+                    'evidence': [
+                        {
+                            'type': 'http_response',
+                            'status_code': execution_result.http_status_code,
+                            'contains_exploit': True
+                        },
+                        {
+                            'type': 'exploit_success',
+                            'details': 'Vulnerability exploited successfully',
+                            'indicators': execution_result.indicators
+                        }
+                    ],
+                    'changes_detected': ['Vulnerability is exploitable again'],
+                    'severity_change': 'unchanged'
+                }
+            else:
+                return {
+                    'regression_detected': False,
+                    'confidence_score': 1.0 - execution_result.confidence,
+                    'findings': [
+                        'PoC failed to exploit vulnerability',
+                        'Fix appears to be still effective',
+                        'No regression detected'
                 ],
                 'evidence': [
-                    {'type': 'http_response', 'status_code': 403, 'blocked': True},
-                    {'type': 'exploit_failure', 'details': 'Vulnerability not exploitable'}
+                    {
+                        'type': 'http_response',
+                        'status_code': execution_result.http_status_code or 403,
+                        'blocked': True
+                    },
+                    {
+                        'type': 'exploit_failure',
+                        'details': 'Vulnerability not exploitable'
+                    }
                 ]
+            }
+
+        except Exception as e:
+            logger.error(f"Error executing PoC replay: {e}", exc_info=True)
+            return {
+                'regression_detected': False,
+                'confidence_score': 0.0,
+                'findings': [f'PoC execution error: {str(e)}'],
+                'evidence': []
             }
     
     async def _execute_automated_scan(

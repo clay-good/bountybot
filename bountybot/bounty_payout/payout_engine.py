@@ -99,16 +99,51 @@ class PayoutEngine:
     ) -> PayoutRecommendation:
         """
         Calculate recommended payout for a vulnerability report.
-        
+
         Args:
             validation_result: ValidationResult object
             researcher_reputation: Optional ResearcherReputation object
             budget_constraints: Optional BudgetConstraints object
             strategy: Payout strategy to use
-            
+
         Returns:
             PayoutRecommendation with amount and justification
         """
+        # CRITICAL: Check for duplicate reports to prevent double-payment
+        if hasattr(validation_result, 'duplicate_check') and validation_result.duplicate_check:
+            duplicate_check = validation_result.duplicate_check
+            if duplicate_check.is_duplicate and duplicate_check.confidence > 0.75:
+                logger.warning(
+                    f"⚠️ DUPLICATE DETECTED: Blocking payout (confidence: {duplicate_check.confidence:.0%})"
+                )
+                justification_obj = PayoutJustification(
+                    base_amount=0.0,
+                    severity_multiplier=0.0,
+                    impact_multiplier=0.0,
+                    reputation_multiplier=0.0,
+                    market_adjustment=0.0,
+                    budget_adjustment=0.0,
+                    factors=[],
+                    reasoning=(
+                        f"Payout blocked: Duplicate of report {duplicate_check.matched_report_id} "
+                        f"(confidence: {duplicate_check.confidence:.0%}). "
+                        f"Reasoning: {', '.join(duplicate_check.reasoning)}"
+                    )
+                )
+                return PayoutRecommendation(
+                    recommended_amount=0.0,
+                    min_amount=0.0,
+                    max_amount=0.0,
+                    severity_tier=SeverityTier.LOW,  # Use LOW instead of NONE
+                    confidence=0.0,
+                    justification=justification_obj
+                )
+            elif duplicate_check.is_duplicate and duplicate_check.confidence > 0.50:
+                logger.warning(
+                    f"⚠️ POSSIBLE DUPLICATE: Reducing payout (confidence: {duplicate_check.confidence:.0%})"
+                )
+                # Will apply reduction multiplier later
+
         # Extract key metrics
         cvss_score = self._extract_cvss_score(validation_result)
         vulnerability_type = self._extract_vulnerability_type(validation_result)
@@ -126,9 +161,18 @@ class PayoutEngine:
         severity_multiplier = self._calculate_severity_multiplier(cvss_score, severity_tier)
         impact_multiplier = self._calculate_impact_multiplier(validation_result)
         reputation_multiplier = self._calculate_reputation_multiplier(researcher_reputation)
-        
+
+        # Apply duplicate reduction multiplier if possible duplicate
+        duplicate_multiplier = 1.0
+        if hasattr(validation_result, 'duplicate_check') and validation_result.duplicate_check:
+            duplicate_check = validation_result.duplicate_check
+            if duplicate_check.is_duplicate and 0.50 < duplicate_check.confidence <= 0.75:
+                # Reduce payout for possible duplicates
+                duplicate_multiplier = 1.0 - (duplicate_check.confidence * 0.5)  # Up to 37.5% reduction
+                logger.info(f"Applying duplicate reduction: {duplicate_multiplier:.2f}x")
+
         # Calculate adjusted amount
-        adjusted_amount = base_amount * severity_multiplier * impact_multiplier * reputation_multiplier
+        adjusted_amount = base_amount * severity_multiplier * impact_multiplier * reputation_multiplier * duplicate_multiplier
         
         # Get market adjustment
         market_rate = self.market_analyzer.get_market_rate(vulnerability_type, severity_tier)

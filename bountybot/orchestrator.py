@@ -14,6 +14,7 @@ if GEMINI_AVAILABLE:
     from bountybot.ai_providers import GeminiProvider
 from bountybot.validators import AIValidator, CodeAnalyzer
 from bountybot.validators.report_validator import ReportValidator
+from bountybot.validators.poc_executor import PoCExecutor
 from bountybot.outputs import JSONOutput, MarkdownOutput
 from bountybot.outputs.html_output import HTMLOutput
 from bountybot.extractors import HTTPRequestExtractor
@@ -74,6 +75,7 @@ class Orchestrator:
         self.ai_validator = AIValidator(self.ai_provider)
         self.code_analyzer = CodeAnalyzer(config.get('code_analysis', {}))
         self.report_validator = ReportValidator()
+        self.poc_executor = PoCExecutor(config.get('poc_execution', {}))
 
         # Initialize extractors and generators
         self.http_extractor = HTTPRequestExtractor()
@@ -173,9 +175,16 @@ class Orchestrator:
                 logger.info("No HTTP requests extracted from report")
                 http_validation_issues = []
 
-            # Step 3: Code analysis (if codebase provided)
+            # Step 3: Code analysis (MANDATORY for payout decisions)
             code_analysis = None
-            if codebase_path and self.config.get('code_analysis', {}).get('enabled', True):
+            if not codebase_path:
+                # Code analysis is now MANDATORY for payout decisions
+                logger.warning("No codebase path provided - validation will proceed but payout will be blocked")
+                result.recommendations_security_team.append(
+                    "⚠️ CRITICAL: Codebase analysis is required before approving any payout"
+                )
+            elif self.config.get('code_analysis', {}).get('enabled', True):
+                stage_start = time.time()
                 logger.info(f"Analyzing codebase: {codebase_path}")
                 code_analysis = self.code_analyzer.analyze(
                     codebase_path,
@@ -183,6 +192,7 @@ class Orchestrator:
                     affected_files=report.affected_components
                 )
                 logger.info(f"Code analysis complete: {len(code_analysis.vulnerable_patterns)} patterns found")
+                stage_timings['code_analysis'] = time.time() - stage_start
 
             # Step 4: Dynamic testing (if target provided)
             dynamic_test = None
@@ -225,7 +235,7 @@ class Orchestrator:
             result.extracted_http_requests = http_requests
             result.http_validation_issues = http_validation_issues
 
-            # Step 7: Generate PoC if vulnerability is valid
+            # Step 7: Generate and Execute PoC if vulnerability is valid
             if result.verdict.value == 'VALID' and http_requests:
                 stage_start = time.time()
                 logger.info("Generating proof-of-concept exploit")
@@ -240,6 +250,48 @@ class Orchestrator:
                 except Exception as e:
                     logger.error(f"Failed to generate PoC: {e}")
                 stage_timings['generate_poc'] = time.time() - stage_start
+
+                # Step 7b: Execute PoC to verify vulnerability (if target URL provided)
+                if target_url and result.generated_poc and self.config.get('poc_execution', {}).get('enabled', False):
+                    stage_start = time.time()
+                    logger.info("Executing PoC to verify vulnerability")
+                    try:
+                        import asyncio
+                        # Run async PoC execution
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # If loop is already running, create a task
+                            execution_result = None
+                            logger.warning("Event loop already running, skipping PoC execution")
+                        else:
+                            execution_result = loop.run_until_complete(
+                                self.poc_executor.execute_poc(
+                                    poc=result.generated_poc,
+                                    target_url=target_url,
+                                    vulnerability_type=report.vulnerability_type
+                                )
+                            )
+
+                        if execution_result:
+                            result.poc_execution_result = execution_result
+
+                            if execution_result.vulnerability_confirmed:
+                                logger.info(f"✅ PoC execution CONFIRMED vulnerability (confidence: {execution_result.confidence:.2%})")
+                                result.recommendations_security_team.insert(0,
+                                    f"✅ VERIFIED: PoC successfully exploited vulnerability with {execution_result.confidence:.0%} confidence"
+                                )
+                                # Increase overall confidence since we have proof
+                                result.confidence = min(result.confidence + 10, 100)
+                            else:
+                                logger.warning(f"❌ PoC execution FAILED to confirm vulnerability")
+                                result.recommendations_security_team.insert(0,
+                                    "⚠️ WARNING: Generated PoC failed to exploit vulnerability - may be false positive or protected by controls"
+                                )
+                                # Decrease confidence since PoC didn't work
+                                result.confidence = max(result.confidence - 15, 0)
+                    except Exception as e:
+                        logger.error(f"Failed to execute PoC: {e}")
+                    stage_timings['poc_execution'] = time.time() - stage_start
 
             # Step 8: Calculate CVSS score
             stage_start = time.time()
@@ -528,24 +580,70 @@ class Orchestrator:
             try:
                 if result.verdict.value == 'VALID':
                     logger.info("Calculating bounty payout recommendation")
-                    reputation = getattr(result, 'researcher_reputation', None)
-                    payout_recommendation = self.payout_engine.calculate_payout(
-                        validation_result=result,
-                        researcher_reputation=reputation
-                    )
-                    result.payout_recommendation = payout_recommendation
 
-                    logger.info(
-                        f"Payout recommendation: ${payout_recommendation.recommended_amount:,.2f} "
-                        f"({payout_recommendation.severity_tier.value}, "
-                        f"range: ${payout_recommendation.min_amount:,.2f}-${payout_recommendation.max_amount:,.2f})"
-                    )
+                    # CRITICAL: Check if codebase analysis was performed
+                    if not code_analysis:
+                        logger.warning("⚠️ PAYOUT BLOCKED: Codebase analysis is required before approving payout")
+                        result.recommendations_security_team.insert(0,
+                            "🚫 PAYOUT BLOCKED: Codebase analysis is MANDATORY before approving any payout. "
+                            "Provide codebase_path to validate vulnerability exists in your code."
+                        )
+                        # Set payout to $0 with explanation
+                        from bountybot.bounty_payout.models import PayoutRecommendation, SeverityTier, PayoutJustification
+                        justification_obj = PayoutJustification(
+                            base_amount=0.0,
+                            severity_multiplier=0.0,
+                            impact_multiplier=0.0,
+                            reputation_multiplier=0.0,
+                            market_adjustment=0.0,
+                            budget_adjustment=0.0,
+                            factors=[],
+                            reasoning="Payout blocked: Codebase analysis required to confirm vulnerability exists in organization's code"
+                        )
+                        result.payout_recommendation = PayoutRecommendation(
+                            recommended_amount=0.0,
+                            min_amount=0.0,
+                            max_amount=0.0,
+                            severity_tier=SeverityTier.LOW,  # Use LOW instead of NONE
+                            confidence=0.0,
+                            justification=justification_obj
+                        )
+                    else:
+                        # Check if vulnerability was confirmed in codebase
+                        if not code_analysis.vulnerable_code_found:
+                            logger.warning("⚠️ PAYOUT REDUCED: No vulnerable code patterns found in codebase")
+                            result.recommendations_security_team.insert(0,
+                                "⚠️ WARNING: No vulnerable code patterns found in codebase analysis. "
+                                "Vulnerability may not exist in your specific implementation. Consider reduced payout or rejection."
+                            )
 
-                    # Add payout to recommendations
-                    result.recommendations_security_team.insert(0,
-                        f"💰 PAYOUT: ${payout_recommendation.recommended_amount:,.2f} "
-                        f"({payout_recommendation.severity_tier.value.upper()}, "
-                        f"confidence: {payout_recommendation.confidence:.0%})"
+                        # Check if PoC execution failed
+                        if hasattr(result, 'poc_execution_result') and result.poc_execution_result:
+                            if not result.poc_execution_result.vulnerability_confirmed:
+                                logger.warning("⚠️ PAYOUT REDUCED: PoC execution failed to confirm vulnerability")
+                                result.recommendations_security_team.insert(0,
+                                    "⚠️ WARNING: PoC failed to exploit vulnerability. May be false positive or protected by controls. "
+                                    "Consider reduced payout or additional verification."
+                                )
+
+                        reputation = getattr(result, 'researcher_reputation', None)
+                        payout_recommendation = self.payout_engine.calculate_payout(
+                            validation_result=result,
+                            researcher_reputation=reputation
+                        )
+                        result.payout_recommendation = payout_recommendation
+
+                        logger.info(
+                            f"Payout recommendation: ${payout_recommendation.recommended_amount:,.2f} "
+                            f"({payout_recommendation.severity_tier.value}, "
+                            f"range: ${payout_recommendation.min_amount:,.2f}-${payout_recommendation.max_amount:,.2f})"
+                        )
+
+                        # Add payout to recommendations
+                        result.recommendations_security_team.insert(0,
+                            f"💰 PAYOUT: ${payout_recommendation.recommended_amount:,.2f} "
+                            f"({payout_recommendation.severity_tier.value.UPPER()}, "
+                            f"confidence: {payout_recommendation.confidence:.0%})"
                     )
             except Exception as e:
                 logger.error(f"Failed to calculate payout recommendation: {e}")

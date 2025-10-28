@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from bountybot.models import CodeAnalysisResult
+from bountybot.validators.context_aware_analyzer import (
+    ContextAwareCodeAnalyzer,
+    ContextAwareAnalysisResult
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +139,7 @@ class CodeAnalyzer:
     def __init__(self, config: Dict[str, Any]):
         """
         Initialize code analyzer.
-        
+
         Args:
             config: Configuration dictionary
         """
@@ -143,6 +147,10 @@ class CodeAnalyzer:
         self.enabled_languages = config.get('languages', ['python', 'javascript'])
         self.exclude_patterns = config.get('exclude_patterns', [])
         self.max_file_size_mb = config.get('max_file_size_mb', 10)
+
+        # Initialize context-aware analyzer
+        self.context_aware_enabled = config.get('context_aware', True)
+        self.context_aware_analyzer = ContextAwareCodeAnalyzer(config.get('context_aware_config', {}))
     
     def analyze(self, codebase_path: str, 
                 vulnerability_type: Optional[str] = None,
@@ -183,18 +191,41 @@ class CodeAnalyzer:
             )
         
         # Analyze each file
+        context_aware_results = []
         for file_path in files_to_analyze:
             try:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     content = f.read()
-                
-                # Search for vulnerability patterns
+
+                # Run context-aware analysis for Python files
+                if self.context_aware_enabled and str(file_path).endswith('.py') and vulnerability_type:
+                    try:
+                        ca_result = self.context_aware_analyzer.analyze_python_file(
+                            str(file_path), vulnerability_type
+                        )
+                        context_aware_results.append(ca_result)
+
+                        # Add findings from context-aware analysis
+                        if ca_result.vulnerable:
+                            vulnerable_files.append(str(file_path))
+                            for finding in ca_result.findings:
+                                vulnerable_patterns.append({
+                                    'file': str(file_path),
+                                    'pattern': 'data_flow_analysis',
+                                    'line': 0,
+                                    'code': finding,
+                                })
+                    except Exception as e:
+                        logger.warning(f"Context-aware analysis failed for {file_path}: {e}")
+
+                # Search for vulnerability patterns (traditional regex-based)
                 if vulnerability_type:
                     patterns = self._get_patterns_for_vuln_type(vulnerability_type)
                     matches = self._search_patterns(content, patterns)
-                    
+
                     if matches:
-                        vulnerable_files.append(str(file_path))
+                        if str(file_path) not in vulnerable_files:
+                            vulnerable_files.append(str(file_path))
                         for match in matches:
                             vulnerable_patterns.append({
                                 'file': str(file_path),
@@ -202,7 +233,7 @@ class CodeAnalyzer:
                                 'line': match['line'],
                                 'code': match['code'],
                             })
-                
+
                 # Check for security controls
                 controls = self._check_security_controls(content)
                 for control, found in controls.items():
@@ -210,7 +241,7 @@ class CodeAnalyzer:
                         security_controls[control] = found
                     else:
                         security_controls[control] = security_controls[control] or found
-            
+
             except Exception as e:
                 logger.warning(f"Error analyzing file {file_path}: {e}")
         
@@ -228,7 +259,22 @@ class CodeAnalyzer:
             analysis_notes.append(f"Found {len(vulnerable_patterns)} potential vulnerability patterns")
         else:
             analysis_notes.append("No obvious vulnerability patterns found")
-        
+
+        # Add context-aware analysis notes
+        if context_aware_results:
+            data_flow_vulns = sum(1 for r in context_aware_results if r.vulnerable)
+            if data_flow_vulns > 0:
+                analysis_notes.append(
+                    f"Context-aware analysis found {data_flow_vulns} data flow vulnerabilities"
+                )
+
+            # Add framework protection info
+            all_protections = []
+            for r in context_aware_results:
+                all_protections.extend(r.framework_protections)
+            if all_protections:
+                analysis_notes.append(f"Framework protections: {', '.join(set(all_protections))}")
+
         if security_controls:
             controls_found = [k for k, v in security_controls.items() if v]
             if controls_found:
