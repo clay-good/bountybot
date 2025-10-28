@@ -300,5 +300,3 @@ helm install bountybot ./helm/bountybot \
 ```
 
 
-**Made with ❤️ for security teams worldwide**
-
