@@ -1,302 +1,214 @@
-# 🛡️ BountyBot - AI-Powered Bug Bounty Validation Platform
+# BountyBot - AI-Powered Bug Bounty Validation
 
-**Automated validation for bug bounty programs**
+**Automated validation platform for bug bounty programs**
 
-BountyBot is an intelligent platform that validates reported security vulnerabilities before payout, ensuring organizations only pay for **real, exploitable threats** in their **actual codebase**.
+BountyBot validates reported security vulnerabilities before payout, ensuring organizations only pay for real, exploitable threats in their actual codebase.
 
----
+[![Tests](https://img.shields.io/badge/tests-1059%20passing-brightgreen)](./tests)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
-## 🎯 Why BountyBot?
+## Overview
 
-### The Problem
-Bug bounty programs face critical challenges:
-- **30-40% false positive rate** - Paying for non-exploitable vulnerabilities
-- **Duplicate submissions** - Multiple researchers reporting the same issue
-- **Manual validation overhead** - Security teams spending hours validating each report
-- **Inconsistent assessment** - Different analysts reaching different conclusions
+Bug bounty programs face a 30-40% false positive rate, costing organizations thousands in invalid payouts. BountyBot automates validation using:
 
-### The Solution
-BountyBot provides **automated, multi-layer validation**:
-- ✅ **PoC Execution** - Safely executes proof-of-concept exploits to verify exploitability
-- ✅ **Codebase Analysis** - AST-based taint tracking to find vulnerable code paths
-- ✅ **Security Control Testing** - Verifies if WAF/IPS actually blocks attacks
-- ✅ **Environment Validation** - Checks if vulnerability applies to your deployment
-- ✅ **Duplicate Detection** - Prevents double-payment for same vulnerability
-- ✅ **AI-Powered Assessment** - Multi-pass validation with confidence scoring
+- **PoC Execution** - Safely executes exploits to verify exploitability
+- **AST-Based Code Analysis** - Taint tracking to find vulnerable code paths
+- **Security Control Testing** - Verifies WAF/IPS effectiveness
+- **Environment Validation** - Checks deployment-specific applicability
+- **Duplicate Detection** - Prevents double-payment
+- **AI Assessment** - Multi-pass validation with confidence scoring
 
-### The Impact
-- **70-85% reduction** in false positive payouts
-- **5-10x faster** validation process
-- **Consistent, objective** assessment across all reports
-- **Automatic duplicate** detection and prevention
+**Results:** 70-85% reduction in false positives, 5-10x faster validation.
 
----
-
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/bountybot.git
 cd bountybot
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Install BountyBot
 pip install -e .
+```
+
+### Configuration
+
+Create `.env`:
+```bash
+ANTHROPIC_API_KEY=your_key_here
+CODEBASE_PATH=/path/to/your/code
 ```
 
 ### Basic Usage
 
 ```python
 from bountybot import Orchestrator
+from bountybot.config_loader import ConfigLoader
 
-# Initialize orchestrator
-orchestrator = Orchestrator(config={
-    'ai_provider': 'anthropic',
-    'api_key': 'your-api-key',
-    'codebase_path': '/path/to/your/code'
-})
+config = ConfigLoader.load_config('config.yaml')
+orchestrator = Orchestrator(config)
 
-# Validate a vulnerability report
 result = orchestrator.validate_report({
     'title': 'SQL Injection in /api/users',
-    'description': 'User input not sanitized...',
+    'description': 'User input not sanitized, allowing SQL injection',
     'severity': 'high',
+    'vulnerability_type': 'sql_injection',
     'affected_endpoint': '/api/users',
     'poc': "curl -X POST http://example.com/api/users -d \"id=' OR '1'='1\""
 })
 
-# Check validation result
-if result['approved']:
-    print(f"✅ Valid vulnerability - Confidence: {result['confidence']}")
-    print(f"💰 Recommended payout: ${result['payout_amount']}")
-else:
-    print(f"❌ Invalid - Reason: {result['reason']}")
+print(f"Verdict: {result.verdict}")
+print(f"Confidence: {result.confidence}")
+print(f"Payout: ${result.payout_amount}")
 ```
 
----
-
-## 🏗️ Architecture
-
-### Core Components
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Orchestrator                             │
-│  (Coordinates all validation components)                     │
-└─────────────────────────────────────────────────────────────┘
-                            │
-        ┌───────────────────┼───────────────────┐
-        ▼                   ▼                   ▼
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│   Report     │   │     Code     │   │     PoC      │
-│  Validator   │   │   Analyzer   │   │   Executor   │
-└──────────────┘   └──────────────┘   └──────────────┘
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│     AI       │   │   Security   │   │ Environment  │
-│  Validator   │   │   Control    │   │  Validator   │
-│              │   │  Verifier    │   │              │
-└──────────────┘   └──────────────┘   └──────────────┘
-        │                   │                   │
-        └───────────────────┼───────────────────┘
-                            ▼
-                    ┌──────────────┐
-                    │    Payout    │
-                    │    Engine    │
-                    └──────────────┘
-```
+## Architecture
 
 ### Validation Pipeline
 
-1. **Pre-Validation** - Check report completeness and quality
-2. **Code Analysis** - AST-based taint tracking and data flow analysis
-3. **PoC Execution** - Safe execution of proof-of-concept exploits
-4. **Security Controls** - Test WAF/IPS effectiveness
-5. **Environment Check** - Verify applicability to deployment
-6. **AI Assessment** - Multi-pass validation with confidence scoring
-7. **Duplicate Detection** - Check for similar/duplicate reports
-8. **Payout Decision** - Calculate payout based on severity and confidence
-
----
-
-## 📚 Key Features
-
-### 1. PoC Execution Engine
-Safely executes proof-of-concept exploits to verify vulnerabilities:
-- HTTP request replay with safety checks
-- Response analysis for vulnerability indicators
-- Dangerous operation blocking (rm -rf, DROP DATABASE, etc.)
-- Evidence collection with screenshots
-
-### 2. Context-Aware Code Analysis
-AST-based static analysis with taint tracking:
-- Data flow analysis from sources to sinks
-- Framework-aware validation (Django, Flask, Express)
-- Sanitization detection
-- Confidence scoring based on multiple factors
-
-### 3. Security Control Verification
-Tests if security controls actually protect:
-- WAF/IPS rule effectiveness testing
-- Input validation verification
-- Endpoint protection analysis
-- Recommendations for control improvements
-
-### 4. Environment-Specific Validation
-Checks if vulnerability applies to your environment:
-- Network topology and accessibility analysis
-- Feature flag verification
-- Access control checking
-- Deployment configuration validation
-
-### 5. AI-Powered Validation
-Multi-pass AI assessment:
-- Quality assessment
-- Plausibility analysis
-- Final verdict with reasoning
-- Confidence scoring
-
-### 6. Duplicate Detection
-Prevents double-payment:
-- Semantic similarity analysis
-- Affected component matching
-- Automatic payout blocking for duplicates
-- Reduction multiplier for similar reports
-
----
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```bash
-# AI Provider Configuration
-ANTHROPIC_API_KEY=your-anthropic-key
-OPENAI_API_KEY=your-openai-key
-
-# Codebase Configuration
-CODEBASE_PATH=/path/to/your/code
-CODEBASE_LANGUAGE=python
-
-# Security Configuration
-ENABLE_POC_EXECUTION=true
-POC_TIMEOUT=30
-POC_MAX_RETRIES=3
-
-# Database Configuration
-DATABASE_URL=postgresql://user:pass@localhost/bountybot
-
-# Redis Configuration (for caching)
-REDIS_URL=redis://localhost:6379
+```
+Report → Parse → Pre-validate → Code Analysis → AI Validation →
+PoC Execution → Security Controls → Environment Check →
+Duplicate Detection → Payout Decision
 ```
 
-### Configuration File
+### Core Components
+
+- **Orchestrator** - Coordinates validation workflow
+- **Validators** - AI, Code, PoC, Security Controls, Environment
+- **Analysis Engines** - False positive detection, duplicate detection, complexity analysis
+- **Payout Engine** - Calculates bounties based on severity, confidence, and complexity
+- **Integration Manager** - Connects to HackerOne, Bugcrowd, GitHub, Jira, Slack
+
+See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for detailed architecture.
+
+## Features
+
+### PoC Execution
+- Safe execution with dangerous pattern blocking
+- HTTP request replay and response analysis
+- Timeout enforcement and rate limiting
+- Evidence collection
+
+### Code Analysis
+- AST-based taint tracking
+- Data flow analysis from sources to sinks
+- Framework detection (Django, Flask, Express)
+- Sanitization detection
+
+### Security Control Testing
+- WAF/IPS effectiveness verification
+- Payload blocking detection
+- Input validation testing
+- Control recommendations
+
+### Environment Validation
+- Network accessibility checks
+- Feature flag verification
+- Access control analysis
+- Service deployment validation
+
+### Duplicate Detection
+- Fuzzy text similarity
+- HTTP request fingerprinting
+- Payload similarity analysis
+- Component matching
+
+## Configuration
 
 Create `config.yaml`:
 
 ```yaml
-ai_provider:
-  provider: anthropic
-  model: claude-3-5-sonnet-20241022
-  api_key: ${ANTHROPIC_API_KEY}
+api:
+  default_provider: anthropic
+  providers:
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+      model: claude-3-5-sonnet-20241022
 
-validation:
-  enable_poc_execution: true
-  enable_code_analysis: true
-  enable_security_controls: true
-  enable_environment_check: true
-  
-  poc_execution:
-    timeout: 30
-    max_retries: 3
-    dangerous_patterns_blocking: true
-  
-  code_analysis:
-    context_aware: true
-    taint_tracking: true
-    framework_detection: true
+code_analysis:
+  enabled: true
+  codebase_path: /path/to/code
+  context_aware: true
+
+poc_execution:
+  enabled: true
+  timeout: 30
+  allow_destructive: false
 
 payout:
-  enable_duplicate_detection: true
-  require_code_analysis: true
   confidence_threshold: 0.7
+  require_code_analysis: true
+  enable_duplicate_detection: true
 ```
 
----
+## API Usage
 
-## 🎮 Demos
-
-See **[DEMOS.md](./DEMOS.md)** for comprehensive demo instructions.
-
-Quick demo:
+Start the API server:
 ```bash
-# Run basic validation demo
-python demos/demo_api.py
-
-# Run advanced features demo
-python demos/demo_advanced_features.py
-
-# Run ML-powered analysis demo
-python demos/demo_ml.py
+python -m bountybot.api.server
 ```
 
----
+Validate a report:
+```bash
+curl -X POST http://localhost:8000/validate \
+  -H "Authorization: Bearer your_token" \
+  -H "Content-Type: application/json" \
+  -d @report.json
+```
 
-## 🧪 Testing
+See [docs/API.md](./docs/API.md) for complete API reference.
+
+## Testing
 
 ```bash
-# Run all tests
-pytest tests/ -v
-
-# Run specific test suite
-pytest tests/test_validation_enhancements.py -v
-
-# Run with coverage
-pytest tests/ --cov=bountybot --cov-report=html
+pytest tests/ -v                    # Run all tests
+pytest tests/ --cov=bountybot       # With coverage
+pytest tests/test_validators.py     # Specific suite
 ```
 
-**Test Status**: ✅ 1035/1035 passing (100%)
+**Status:** 1059/1059 tests passing
 
----
-
-## 🚢 Deployment
+## Deployment
 
 ### Docker
-
 ```bash
-# Build image
-docker build -t bountybot:latest .
-
-# Run container
-docker run -d \
-  -e ANTHROPIC_API_KEY=your-key \
-  -e CODEBASE_PATH=/app/code \
-  -p 8000:8000 \
-  bountybot:latest
+docker build -t bountybot .
+docker run -d -p 8000:8000 \
+  -e ANTHROPIC_API_KEY=your_key \
+  bountybot
 ```
 
 ### Kubernetes
-
 ```bash
-# Deploy to Kubernetes
 kubectl apply -f k8s/deployment.yaml
-
-# Check status
-kubectl get pods -l app=bountybot
 ```
 
 ### Helm
-
 ```bash
-# Install with Helm
-helm install bountybot ./helm/bountybot \
-  --set apiKey=your-key \
-  --set codebasePath=/app/code
+helm install bountybot ./helm/bountybot
 ```
 
+See [docs/CICD.md](./docs/CICD.md) for CI/CD integration.
 
+## Documentation
+
+- [Architecture](./docs/ARCHITECTURE.md) - System design and components
+- [API Reference](./docs/API.md) - REST API documentation
+- [CI/CD Integration](./docs/CICD.md) - Pipeline setup
+- [Backup & Recovery](./docs/BACKUP.md) - Data management
+
+## Examples
+
+See `examples/` directory for sample vulnerability reports:
+- `sql_injection_report.json` - SQL injection example
+- `xss_report.md` - XSS example
+- `advanced_sqli_report.json` - Complex SQL injection
+
+Run demos:
+```bash
+python demos/demo_api.py              # Basic validation
+python demos/demo_advanced_features.py # All features
+python demos/demo_ml.py               # ML analysis
+```

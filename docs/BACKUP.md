@@ -469,10 +469,3 @@ else:
     print("Storage backend connection failed")
 ```
 
-## Support
-
-For issues or questions:
-- GitHub Issues: https://github.com/yourusername/bountybot/issues
-- Documentation: https://bountybot.readthedocs.io
-- Email: support@bountybot.com
-

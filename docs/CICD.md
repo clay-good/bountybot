@@ -530,13 +530,3 @@ kubectl run -it --rm debug --image=postgres:15 --restart=Never -- psql -h postgr
 # Check database logs
 kubectl logs deployment/postgres -n bountybot
 ```
-
----
-
-## Support
-
-For issues or questions:
-- GitHub Issues: https://github.com/clay-good/bountybot/issues
-- Documentation: https://bountybot.readthedocs.io
-- Email: team@bountybot.example.com
-
