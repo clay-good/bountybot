@@ -26,7 +26,7 @@ Bug bounty programs face a 30-40% false positive rate, costing organizations tho
 ### Installation
 
 ```bash
-git clone https://github.com/yourusername/bountybot.git
+git clone https://github.com/clay-good/bountybot.git
 cd bountybot
 pip install -r requirements.txt
 pip install -e .
