@@ -10,6 +10,8 @@ from rich import box
 
 from bountybot.config_loader import ConfigLoader
 from bountybot.orchestrator import Orchestrator
+from bountybot import __version__
+
 
 # Configure logging - file only, no console output
 logging.basicConfig(
@@ -116,7 +118,7 @@ def main(report, codebase, target, provider, model, output, output_dir,
                 border_style="green"
             ))
             return
-        
+
         # Initialize orchestrator
         orchestrator = Orchestrator(full_config)
 
@@ -127,7 +129,7 @@ def main(report, codebase, target, provider, model, output, output_dir,
         # Display header
         console.print()
         console.print(Panel.fit(
-            "[bold cyan]bountybot v2.0.0[/bold cyan]\n"
+            f"[bold cyan]bountybot v{__version__}[/bold cyan]\n"
             "Enterprise Bug Bounty Validation Framework",
             border_style="cyan"
         ))
